@@ -234,6 +234,31 @@
         margin-top: 18px;
       }
 
+      .big-number {
+        margin: 22px auto 8px;
+        padding: 18px 22px;
+        border-radius: 14px;
+        text-align: center;
+        max-width: 760px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+        border: 1px solid rgba(255,255,255,0.04);
+        box-shadow: 0 10px 40px rgba(2,6,23,0.45);
+      }
+      .big-number .label { color: var(--muted); font-size: 0.9rem; margin-bottom: 6px; }
+      .big-number .number { font-weight: 800; font-size: 2rem; margin: 4px 0; color: var(--text); }
+      .big-number .note { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+
+      /* adjust CTA and copy feedback */
+      #copy-number-button { cursor: pointer; }
+      .copy-feedback {
+        display: inline-block;
+        margin-left: 12px;
+        color: var(--muted);
+        font-size: 0.9rem;
+        opacity: 0;
+        transition: opacity 160ms ease;
+      }
+
       .stat {
         padding: 18px;
         border-radius: 20px;
@@ -316,7 +341,6 @@
       <div class="nav">
         <div class="brand">
           <div class="brand-mark"><img src="/Reachout-logo.png" alt="Reachout logo"></div>
-          <div>Reachout</div>
         </div>
         <div class="pill">AI access over SMS • text {{TWILIO_PHONE_NUMBER}} • no Wi‑Fi needed</div>
       </div>
@@ -333,38 +357,22 @@
               No smartphone required. No app download. No Wi‑Fi needed. Just send an SMS and get clear, friendly answers on any phone, including feature phones used by seniors and anyone who wants tech that feels easy.
             </p>
             <div class="cta-row">
-              <a class="button primary" href="sms:{{TWILIO_PHONE_NUMBER}}">Text {{TWILIO_PHONE_NUMBER}}</a>
+              <button id="copy-number-button" class="button primary">Text {{TWILIO_PHONE_NUMBER}}</button>
               <a class="button secondary" href="#features">Why it helps</a>
             </div>
           </section>
 
-          <aside class="phone-card" aria-label="SMS preview">
-            <div class="phone-screen">
-              <div class="phone-top">
-                <span>SMS Preview</span>
-                <span>Reachout AI</span>
-              </div>
-              <div class="menu-bubble">
-                <strong>Contact</strong>
-                <div class="menu-line">Text Reachout at {{TWILIO_PHONE_NUMBER}}</div>
-              </div>
-              <div class="menu-bubble">
-                <strong>Text a number to get started</strong>
-                <div class="menu-line">1 — Weather</div>
-                <div class="menu-line">2 — News</div>
-                <div class="menu-line">3 — Ask a question</div>
-                <div class="menu-line">4 — Help</div>
-              </div>
-              <div class="menu-bubble" style="margin-bottom: 0;">
-                <strong>Example</strong>
-                <div class="menu-line">“1 Montreal Canada”</div>
-                <div class="menu-line">“3 What is a bank holiday?”</div>
-              </div>
-            </div>
-          </aside>
+          <!-- phone-card removed per design request -->
         </div>
 
-        <div class="stats">
+          <!-- Big centered current number -->
+          <div class="big-number">
+            <div class="label">Current working number</div>
+            <div class="number">{{TWILIO_PHONE_NUMBER}}</div>
+            <div class="note">This is the number Reachout is currently using to send and receive SMS.</div>
+          </div>
+
+          <div class="stats">
           <div class="stat">
             <div class="label">Accessibility</div>
             <div class="value">Simple SMS</div>
@@ -405,6 +413,35 @@
         Built for <strong>DawsHacks mini hackathon</strong> by a team of four: <strong>Artem Brandt</strong>, <strong>Talon Dunbar</strong>,
         <strong>Yan Chi Ng</strong>, and <strong>Jaden Ho</strong>.
       </footer>
+    </div>
+
+    <script>
+      (function () {
+        const btn = document.getElementById('copy-number-button');
+        const number = '{{TWILIO_PHONE_NUMBER}}';
+        function showFeedback(msg) {
+          let span = document.querySelector('.copy-feedback');
+          if (!span) {
+            span = document.createElement('span');
+            span.className = 'copy-feedback';
+            btn.parentNode.appendChild(span);
+          }
+          span.textContent = msg;
+          span.style.opacity = '1';
+          setTimeout(() => (span.style.opacity = '0'), 2000);
+        }
+        if (btn) {
+          btn.addEventListener('click', async function (e) {
+            try {
+              await navigator.clipboard.writeText(number);
+              showFeedback('Copied to clipboard');
+            } catch (err) {
+              showFeedback('Copy failed — select and copy manually');
+            }
+          });
+        }
+      })();
+    </script>
     </div>
   </body>
 </html>
