@@ -41,11 +41,10 @@ const twilioClient = twilio(
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-// In-memory state variables
-
 // Map for phone numbers and last request timestamp
 const rateLimitMap = new Map();
 const userState = new Map();
+const callSessions = new Map(); // CallSid -> { history: [{role, parts}], phone }
 
 // SQLite setup
 const db = new sqlite3.Database("./conversations.db");
@@ -616,7 +615,19 @@ app.post("/voice/respond", async (req, res) => {
   }
 });  
 
+<<<<<<< HEAD
 // Run the Express server :D
+=======
+app.post("/voice/end", (req, res) => {
+  const { CallSid, From } = req.body;
+  console.log(`[${new Date().toISOString()}] Call ended from ${From} - CallSid: ${CallSid}`);
+  
+  //end call session
+  callSessions.delete(CallSid);
+  addConversationw(From, "inbound", "[Voice Call Ended]", "success", "voice");
+  res.sendStatus(200);
+});
+>>>>>>> 771b02d (Add voice/end endpoint that cleans up call session)
 
 app.listen(PORT, () => {
   console.log("Reachout server (SMS - Gemini Bridge)");
