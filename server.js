@@ -50,6 +50,24 @@ db.serialize(() => {
 });
 
 /**
+ * Fetches the most recent conversations from the database
+ * @param {number} limit - max number of records to return
+ * @returns {Promise<Array>} recent conversation entries
+ */
+function getConversations(limit = 50) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT * FROM conversations ORDER BY time DESC LIMIT ?`,
+      [limit],
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows);
+      },
+    );
+  });
+}
+
+/**
  * Shows only the last 4 digits of a phone number (+*******1234)
  * @param {string} phoneNumber - the phone number to anonymize
  */
