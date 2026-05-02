@@ -210,3 +210,10 @@ app.post("/sms", async (req, res) => {
 
   res.status(200).type("text/xml").send("<Response></Response>");
 });
+
+// Run the Express server :D
+app.listen(PORT, () => {
+  console.log("Reachout server (SMS - Gemini Bridge)");
+  console.log(`Webhook: POST http://localhost:${PORT}/sms`);
+  console.log(`Status:  http://localhost:${PORT}/`);
+});
