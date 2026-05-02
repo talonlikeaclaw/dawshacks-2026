@@ -37,9 +37,7 @@ app.get("/static/script.js", (req, res) => {
 // Configuration
 const PORT = process.env.PORT || 3000;
 const RATE_LIMIT_SECONDS = parseInt(process.env.RATE_LIMIT_SECONDS || "10", 10);
-const SYSTEM_PROMPT = `You are a helpful AI assistant reachable via SMS.
-Keep responses SHORT and CONCISE (under 320 characters when possible).
-Use simple language. No markdown formatting. Be friendly but brief.`;
+
 const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
 const WEATHER_GEO_BASE =
   process.env.WEATHER_API_BASE ||
@@ -50,12 +48,15 @@ const WEATHER_DATA_BASE =
 const WEATHER_UNITS = process.env.WEATHER_UNITS || "metric";
 
 // Twilio setup
+const SYSTEM_PROMPT = `You are a helpful AI assistant reachable via SMS.
+Keep responses SHORT and CONCISE (under 320 characters when possible).
+Use simple language. No markdown formatting. Be friendly but brief.`;
+
 const VOICE_SYSTEM_PROMPT = `You are a helpful AI assistant on a phone call.
 Respond in natural spoken English only — no markdown, no bullet points, no lists.
 Keep answers concise: 1–3 sentences max unless the user specifically asks for more detail.
 Never say "bullet point" or use symbols like asterisks or dashes.
 Be warm, clear, and direct.`;
-// ─── CLIENTS ──────────────────────────────────────────────────────────
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN,
@@ -187,7 +188,13 @@ async function sendSms(to, body) {
  * @param {string} status - the status of the conversation
  * @returns {Promise<Object>} the created entry
  */
-function addConversation(phoneNumber, direction, body, status, channel = "sms") {
+function addConversation(
+  phoneNumber,
+  direction,
+  body,
+  status,
+  channel = "sms",
+) {
   const entry = {
     id: Date.now() + Math.random().toString(36).slice(2, 7),
     time: new Date().toISOString(),
@@ -363,36 +370,28 @@ async function handleMenuChoice(phone, choice, args = "") {
     }
 
     case "2": {
-      // News handler (stub)
-      return "News coming soon! For now, try: 3 What's in the news today?";
-    }
-
-    case "3": {
-      // General ask handler (stub showing they can ask anything)
+      // General ask handler
       if (!cleanedArgs) {
-        return "Ask me anything! e.g., 3 What's the capital of France?";
+        return "Ask me anything! e.g., 2 What's the capital of France?";
       }
 
       // Mark that we're handling a question; the webhook will handle it
       return null; // signals to the webhook to use Gemini
     }
 
-    case "4": {
+    case "3": {
       // Help handler
       return [
         "Reachout AI Help:",
         "",
         "1 - Weather (1 city country)",
-        "2 - News (coming soon)",
-        "3 - Ask anything",
-        "4 - This help",
-        "",
-        "Text MENU to restart.",
+        "2 - Ask anything",
+        "3 - This help",
       ].join("\n");
     }
 
     default: {
-      return "Invalid choice. Text 1, 2, 3, or 4. Text MENU for options.";
+      return "Invalid choice. Text 1, 2, or 3. Text MENU for options.";
     }
   }
 }
@@ -417,11 +416,8 @@ function buildWelcomeMenu() {
     "",
     "Text a number to get started:",
     "1 - Weather",
-    "2 - News",
-    "3 - Ask a question",
-    "4 - Help",
-    "",
-    "Reply with MENU anytime.",
+    "2 - Ask a question",
+    "3 - Help",
   ].join("\n");
 }
 
@@ -485,10 +481,10 @@ app.post("/sms", async (req, res) => {
     return res.status(200).type("text/xml").send("<Response></Response>");
   }
 
-  // Check if message starts with a menu choice (1/2/3/4)
+  // Check if message starts with a menu choice (1/2/3)
   let geminiPrompt = messageBody;
   const firstChar = messageBody.charAt(0);
-  if (["1", "2", "3", "4"].includes(firstChar)) {
+  if (["1", "2", "3"].includes(firstChar)) {
     const choice = firstChar;
     const args = messageBody.slice(1).trim();
 
@@ -576,45 +572,53 @@ app.get("/api/conversations", async (req, res) => {
 
 // ─── VOICE FUNCTIONS & WEBHOOKS ──────────────────────────────────────────────────────
 
-function buildVoiceLoop(text, actionPath){
+function buildVoiceLoop(text, actionPath) {
   const twiml = new twilio.twiml.VoiceResponse();
   const gather = twiml.gather({
-    input: 'speech',
+    input: "speech",
     action: actionPath,
-    method: 'POST',
-    speechTimeout: 'auto',
-    speechModel: 'phone_call',
-    language: 'en-US',
+    method: "POST",
+    speechTimeout: "auto",
+    speechModel: "phone_call",
+    language: "en-US",
   });
-  gather.say(text, { voice: 'Polly.Joanna', language: 'en-US' });
+  gather.say(text, { voice: "Polly.Joanna", language: "en-US" });
   return twiml.toString();
 }
 
 app.post("/voice", (req, res) => {
   const { CallSid, From } = req.body;
-  console.log(`[${new Date().toISOString()}] Incoming call from ${From} - CallSid: ${CallSid}`);
+  console.log(
+    `[${new Date().toISOString()}] Incoming call from ${From} - CallSid: ${CallSid}`,
+  );
 
   //start new voice session
   callSessions.set(CallSid, { history: [], phone: From });
   addConversation(From, "inbound", "[Voice Call Started]", "success", "voice");
 
-  //respond using twiML and listens, then sends to /voice/respond 
-  res.type("text/xml").send(buildVoiceLoop(
-    "Hi! This is Reachout AI. I'm your personal assistant. What can I help you with?",
-    "/voice/respond"
-  ));
+  //respond using twiML and listens, then sends to /voice/respond
+  res
+    .type("text/xml")
+    .send(
+      buildVoiceLoop(
+        "Hi! This is Reachout AI. I'm your personal assistant. What can I help you with?",
+        "/voice/respond",
+      ),
+    );
 });
 
 app.post("/voice/respond", async (req, res) => {
   const { CallSid, From, SpeechResult } = req.body;
-  console.log(`[${new Date().toISOString()}] Voice input from ${From} - CallSid: ${CallSid} - SpeechResult: "${SpeechResult}"`);
+  console.log(
+    `[${new Date().toISOString()}] Voice input from ${From} - CallSid: ${CallSid} - SpeechResult: "${SpeechResult}"`,
+  );
 
   //get voice session history
   const { history } = callSessions.get(CallSid);
 
   const userText = SpeechResult.trim();
   addConversation(From, "inbound", userText, "success", "voice");
-  
+
   //add user input to history
   history.push({ role: "user", parts: [{ text: userText }] });
 
@@ -626,12 +630,16 @@ app.post("/voice/respond", async (req, res) => {
     },
     {
       role: "model",
-      parts: [{ text: "Understood. I'll keep my answers short and spoken naturally."}]
+      parts: [
+        {
+          text: "Understood. I'll keep my answers short and spoken naturally.",
+        },
+      ],
     },
     ...history,
   ];
 
-  try{
+  try {
     const result = await model.generateContent({
       contents,
       generationConfig: {
@@ -640,7 +648,9 @@ app.post("/voice/respond", async (req, res) => {
     });
     //get gemini reply
     const reply = result.response.text().trim();
-    console.log(`Gemini voice response for ${From}: "${reply.slice(0, 80)}..."`);
+    console.log(
+      `Gemini voice response for ${From}: "${reply.slice(0, 80)}..."`,
+    );
 
     //add model reply to history
     history.push({ role: "model", parts: [{ text: reply }] });
@@ -653,17 +663,23 @@ app.post("/voice/respond", async (req, res) => {
   } catch (err) {
     console.error("Gemini API error:", err.message);
     addConversation(From, "outbound", "", "error", "voice");
-    res.type("text/xml").send(
-      buildVoiceLoop("Sorry, the AI is having trouble right now. Try again in a moment!", 
-      "/voice/respond"
-    ));
+    res
+      .type("text/xml")
+      .send(
+        buildVoiceLoop(
+          "Sorry, the AI is having trouble right now. Try again in a moment!",
+          "/voice/respond",
+        ),
+      );
   }
-});  
+});
 
 app.post("/voice/end", (req, res) => {
   const { CallSid, From } = req.body;
-  console.log(`[${new Date().toISOString()}] Call ended from ${From} - CallSid: ${CallSid}`);
-  
+  console.log(
+    `[${new Date().toISOString()}] Call ended from ${From} - CallSid: ${CallSid}`,
+  );
+
   //end call session
   callSessions.delete(CallSid);
   addConversation(From, "inbound", "[Voice Call Ended]", "success", "voice");
