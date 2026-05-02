@@ -243,6 +243,96 @@ async function getWeather(city, country = "") {
   }
 }
 
+/**
+ * Routes a menu choice (1/2/3/4) to the appropriate handler
+ * text remainder is parsed as arguments for the handler
+ * @param {string} phone - phone number
+ * @param {string} choice - the menu choice ("1", "2", "3", or "4")
+ * @param {string} args - optional remainder of the message (e.g., "Montreal Canada" for weather)
+ * @returns {Promise<string>} the response message to send
+ */
+async function handleMenuChoice(phone, choice, args = "") {
+  const cleanedChoice = String(choice || "").trim();
+  const cleanedArgs = String(args || "").trim();
+
+  switch (cleanedChoice) {
+    case "1": {
+      // Weather handler
+      if (!cleanedArgs) {
+        return "Send: 1 city country (e.g., 1 Montreal Canada)";
+      }
+
+      const parts = cleanedArgs.split(/\s+/);
+      const city = parts[0];
+      const country = parts.slice(1).join(" ");
+
+      const result = await getWeather(city, country);
+      return result.message;
+    }
+
+    case "2": {
+      // News handler (stub)
+      return "News coming soon! For now, try: 3 What's in the news today?";
+    }
+
+    case "3": {
+      // General ask handler (stub showing they can ask anything)
+      if (!cleanedArgs) {
+        return "Ask me anything! e.g., 3 What's the capital of France?";
+      }
+
+      // Mark that we're handling a question; the webhook will handle it
+      return null; // signals to the webhook to use Gemini
+    }
+
+    case "4": {
+      // Help handler
+      return [
+        "Reachout AI Help:",
+        "",
+        "1 - Weather (1 city country)",
+        "2 - News (coming soon)",
+        "3 - Ask anything",
+        "4 - This help",
+        "",
+        "Text MENU to restart.",
+      ].join("\n");
+    }
+
+    default: {
+      return "Invalid choice. Text 1, 2, 3, or 4. Text MENU for options.";
+    }
+  }
+}
+
+/**
+ * Detects if the message is a menu keyword (for redisplaying the menu)
+ * @param {string} message - the message body
+ * @returns {boolean}
+ */
+function isMenuKeyword(message) {
+  const normalized = message.trim().toUpperCase();
+  return ["MENU", "START", "HELP", "?"].includes(normalized);
+}
+
+/**
+ * Builds and returns the Reachout AI welcome menu as a string
+ * @returns {string}
+ */
+function buildWelcomeMenu() {
+  return [
+    "Reachout AI",
+    "",
+    "Text a number to get started:",
+    "1 - Weather",
+    "2 - News",
+    "3 - Ask a question",
+    "4 - Help",
+    "",
+    "Reply with MENU anytime.",
+  ].join("\n");
+}
+
 // SMS Webhook
 app.post("/sms", async (req, res) => {
   const { Body, From, MessageSid } = req.body;
