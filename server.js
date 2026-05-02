@@ -33,6 +33,8 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 const conversations = [];
 // Map for phone numbers and last request timestamp
 const rateLimitMap = new Map();
+// Map for per-user menu state and lightweight SMS session info
+const userState = new Map();
 const MAX_CONVERSATIONS = 50;
 
 /**
@@ -130,6 +132,24 @@ function addConversation(phoneNumber, direction, body, status) {
     conversations.pop();
   }
   return entry;
+}
+
+/**
+ * Gets or creates a state object for a phone number.
+ * This is stored in memory only and resets when the server restarts.
+ * @param {string} phoneNumber - the phone number related to the user state
+ * @returns {{ seenMenu: boolean, lastChoice: string | null, lastSeenAt: string | null }}
+ */
+function getUserState(phoneNumber) {
+  if (!userState.has(phoneNumber)) {
+    userState.set(phoneNumber, {
+      seenMenu: false,
+      lastChoice: null,
+      lastSeenAt: null,
+    });
+  }
+
+  return userState.get(phoneNumber);
 }
 
 // SMS Webhook
