@@ -26,3 +26,59 @@ const twilioClient = twilio(
 // Gemini setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+/**
+ * Shows only the last 4 digits of a phone number (+*******1234)
+ * @param {number} phoneNumber - the phone number to anonymize
+ */
+function anonymizePhone(phoneNumber) {
+  const cleaned = phone.replace(/\D/g, "");
+
+  if (cleaned.length <= 4) {
+    return "****" + cleaned;
+  }
+  return "+" + "*".repeat(cleaned.length - 4) + cleaned.slice(-4);
+}
+
+/**
+ * Splits the SMS text messages into chunks
+ * (SMS messages are limited to 160 character per message
+ * or 153 for multi-part messages)
+ * @param {string} text - the text to split into chunks
+ */
+function splitSms(text) {
+  if (text.length <= 160) {
+    return [text];
+  }
+
+  const segments = [];
+  let remaining = text;
+  // 153 - 8 = 145 chars max (messages prepend "(10/10) ")
+  const chunkSize = 145;
+
+  while (remaining.length > 0) {
+    const cut = remaining.length > chunkSize ? chunkSize : remaining.length;
+    segments.push(remaining.slice(0, cut));
+    remaining = remaining.slice(cut);
+  }
+
+  return segments;
+}
+
+/**
+ * Sends an SMS message using Twilio client and console logs
+ * @param {number} to - the number to send the text to
+ * @param {string} body - the body text of the message to send
+ */
+async function sendSms(to, body) {
+  try {
+    await twilioClient.messages.create({
+      body,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to,
+    });
+    console.log(`SMS sent to ${to}: "${body.slice(0, 60)}..."`);
+  } catch (err) {
+    console.error("Twilio send error:", err.message);
+  }
+}
