@@ -26,6 +26,12 @@ const WEATHER_DATA_BASE =
 const WEATHER_UNITS = process.env.WEATHER_UNITS || "metric";
 
 // Twilio setup
+const VOICE_SYSTEM_PROMPT = `You are a helpful AI assistant on a phone call.
+Respond in natural spoken English only — no markdown, no bullet points, no lists.
+Keep answers concise: 1–3 sentences max unless the user specifically asks for more detail.
+Never say "bullet point" or use symbols like asterisks or dashes.
+Be warm, clear, and direct.`;
+// ─── CLIENTS ──────────────────────────────────────────────────────────
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN,
@@ -538,23 +544,78 @@ function buildVoiceLoop(text, actionPath){
   return twiml.toString();
 }
 
-
-
 app.post("/voice", (req, res) => {
   const { CallSid, From } = req.body;
   console.log(`[${new Date().toISOString()}] Incoming call from ${From} - CallSid: ${CallSid}`);
 
-  //start voice session
+  //start new voice session
   callSessions.set(CallSid, { history: [], phone: From });
   addConversation(From, "inbound", "[Voice Call Started]", "success", "voice");
 
+  //respond using twiML and listens, then sends to /voice/respond 
   res.type("text/xml").send(buildVoiceLoop(
     "Hi! I'm your AI assistant. What can I help you with?",
     "/voice/respond"
   ));
 });
 
+app.post("/voice/respond", async (req, res) => {
+  const { CallSid, From, SpeechResult } = req.body;
+  console.log(`[${new Date().toISOString()}] Voice input from ${From} - CallSid: ${CallSid} - SpeechResult: "${SpeechResult}"`);
+
+  //get voice session history
+  const { history } = callSessions.get(CallSid);
+
+  const userText = SpeechResult.trim();
+  addConversation(From, "inbound", userText, "success", "voice");
+  
+  //add user input to history
+  history.push({ role: "user", parts: [{ text: userText }] });
+
+  //build contents of prompt to gemini, including system prompt and conversation history
+  const contents = [
+    {
+      role: "user",
+      parts: [{ text: VOICE_SYSTEM_PROMPT }],
+    },
+    {
+      role: "model",
+      parts: [{ text: "Understood. I'll keep my answers short and spoken naturally."}]
+    },
+    ...history,
+  ];
+
+  try{
+    const result = await model.generateContent({
+      contents,
+      generationConfig: {
+        temperature: 0.7,
+      },
+    });
+    //get gemini reply
+    const reply = result.response.text().trim();
+    console.log(`Gemini voice response for ${From}: "${reply.slice(0, 80)}..."`);
+
+    //add model reply to history
+    history.push({ role: "model", parts: [{ text: reply }] });
+    callSessions.get(CallSid).history = history;
+
+    addConversation(From, "outbound", reply, "success", "voice");
+
+    //restart conversation loop
+    res.type("text/xml").send(buildVoiceLoop(reply, "/voice/respond"));
+  } catch (err) {
+    console.error("Gemini API error:", err.message);
+    addConversation(From, "outbound", "", "error", "voice");
+    res.type("text/xml").send(
+      buildVoiceLoop("Sorry, the AI is having trouble right now. Try again in a moment!", 
+      "/voice/respond"
+    ));
+  }
+});  
+
 // Run the Express server :D
+
 app.listen(PORT, () => {
   console.log("Reachout server (SMS - Gemini Bridge)");
   console.log(`Webhook: POST http://localhost:${PORT}/sms`);
