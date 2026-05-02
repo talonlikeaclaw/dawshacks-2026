@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const twilio = require("twilio");
@@ -10,6 +11,9 @@ const sqlite3 = require("sqlite3").verbose();
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+// Serve static assets from the public directory (logo, images, scripts, css)
+// Keep index disabled so the custom rendered landing page handles "/".
+app.use(express.static(path.join(__dirname, "public"), { index: false }));
 app.use(express.static(path.join(__dirname, "static")));
 app.use(
   "/static",
@@ -18,7 +22,7 @@ app.use(
   }),
 );
 
-app.get("/", (req, res) => {
+app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "admin.html"));
 });
 
@@ -222,6 +226,20 @@ function addConversation(
   });
 }
 
+function renderLandingPage() {
+  const templatePath = path.join(__dirname, "public", "index.html");
+  const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || "";
+  let template = fs.readFileSync(templatePath, "utf8");
+
+  // Inject phone number into the head so it's available before the inline script runs
+  if (twilioPhoneNumber) {
+    const phoneScript = `<script>window.REACHOUT_PHONE="${twilioPhoneNumber}"<\/script>`;
+    template = template.replace("</head>", phoneScript + "\n</head>");
+  }
+
+  return template;
+}
+
 /**
  * Gets or creates a state object for a phone number.
  * This is stored in memory only and resets when the server restarts.
@@ -402,6 +420,12 @@ function buildWelcomeMenu() {
     "3 - Help",
   ].join("\n");
 }
+
+app.get("/", (req, res) => {
+  const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || "(not configured)";
+  console.log(`Serving landing page — Twilio number: ${twilioPhoneNumber}`);
+  res.type("html").send(renderLandingPage());
+});
 
 // SMS Webhook
 app.post("/sms", async (req, res) => {
