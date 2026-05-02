@@ -372,6 +372,53 @@ app.post("/sms", async (req, res) => {
   // Log inbound messages
   addConversation(From, "inbound", messageBody, "success");
 
+  const state = getUserState(From);
+
+  // Check if user is asking for the menu (keyword) or if first-time user
+  if (isMenuKeyword(messageBody) || !state.seenMenu) {
+    state.seenMenu = true;
+    state.lastChoice = "menu";
+    state.lastSeenAt = new Date().toISOString();
+
+    const menuText = buildWelcomeMenu();
+    console.log(`Showing menu to ${From}`);
+    await sendSms(From, menuText);
+    addConversation(From, "outbound", menuText, "success");
+    return res.status(200).type("text/xml").send("<Response></Response>");
+  }
+
+  // Check if message starts with a menu choice (1/2/3/4)
+  const firstChar = messageBody.charAt(0);
+  if (["1", "2", "3", "4"].includes(firstChar)) {
+    const choice = firstChar;
+    const args = messageBody.slice(1).trim();
+
+    console.log(`Menu choice ${choice} from ${From} with args: "${args}"`);
+
+    const handlerResponse = await handleMenuChoice(From, choice, args);
+
+    // If handler returns null, it means use Gemini for option 3
+    if (handlerResponse === null) {
+      // Fall through to Gemini below
+    } else {
+      // Send the handler's response
+      state.lastChoice = choice;
+      state.lastSeenAt = new Date().toISOString();
+
+      const segments = splitSms(handlerResponse);
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        const prefix =
+          segments.length > 1 ? `(${i + 1}/${segments.length}) ` : "";
+        await sendSms(From, prefix + segment);
+      }
+
+      addConversation(From, "outbound", handlerResponse, "success");
+      return res.status(200).type("text/xml").send("<Response></Response>");
+    }
+  }
+
+  // Fallback: treat as free-form question to Gemini
   try {
     // Call Gemini AI
     const result = await model.generateContent({
@@ -388,6 +435,9 @@ app.post("/sms", async (req, res) => {
 
     const aiText = result.response.text().trim();
     console.log(`Gemini response for ${From}: "${aiText.slice(0, 80)}..."`);
+
+    state.lastChoice = "ask";
+    state.lastSeenAt = new Date().toISOString();
 
     // Send response(s)
     const segments = splitSms(aiText);
