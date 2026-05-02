@@ -27,6 +27,13 @@ const twilioClient = twilio(
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+// In-memory state variables
+// Recent messages to display on status page
+const conversations = [];
+// Map for phone numbers and last request timestamp
+const rateLimitMap = new Map();
+const MAX_CONVERSATIONS = 50;
+
 /**
  * Shows only the last 4 digits of a phone number (+*******1234)
  * @param {number} phoneNumber - the phone number to anonymize
@@ -106,4 +113,6 @@ app.post("/sms", async (req, res) => {
     );
     return res.status(200).type("text/xml").send("<Response></Response>");
   }
+
+  // Rate limiting
 });
