@@ -82,3 +82,16 @@ async function sendSms(to, body) {
     console.error("Twilio send error:", err.message);
   }
 }
+
+// SMS Webhook
+app.post("/sms", async (req, res) => {
+  const { Body, From, MessageSid } = req.body;
+
+  console.log(`[${new Date().toISOString()}] Webhook from ${From}: "${Body}"`);
+
+  // Validate webhook
+  if (!From || !Body) {
+    console.error("Incorrect webhook format:", req.body);
+    return res.status(400).send("<Response></Response>");
+  }
+});
