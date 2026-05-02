@@ -192,7 +192,8 @@ app.post("/sms", async (req, res) => {
     const segments = splitSms(aiText);
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
-      segments.length > 1 ? `(${i + 1}/${segments.length}) ` : "";
+      const prefix =
+        segments.length > 1 ? `(${i + 1}/${segments.length}) ` : "";
       await sendSms(From, prefix + segment);
     }
 
