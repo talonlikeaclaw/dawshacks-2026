@@ -132,4 +132,13 @@ app.post("/sms", async (req, res) => {
   }
 
   // Rate limiting
+  const rateCheck = checkRateLimit(From);
+  if (!rateCheck.allowed) {
+    console.log(`Rate limited: ${From} (wait ${rateCheck.wait}s)`);
+    await sendSms(
+      From,
+      `Whoa there! Wait ${rateCheck.wait}s before sending another message.`,
+    );
+    return res.status(200).type("text/xml").send("<Response></Response>");
+  }
 });
