@@ -1,0 +1,65 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: lightcoral;
+    line-height: 1.6;
+}
+
+h1, h2, h3 {
+    color: whitesmoke;
+    margin-bottom: 1rem;
+}
+header {
+    background-color: #333;
+    color: whitesmoke;
+    text-align: center;
+    padding: 1rem;
+}
+p {
+    margin-bottom: 1rem;
+    color: black;
+    text-align: center;
+    font-size: 20px;
+    font-weight: bold;
+}
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+#logs {
+    display: block;
+    padding: 1rem;
+    width: 100%;
+    overflow-x: auto;
+}
+.conversation-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 auto;
+    max-width: 1200px;
+    color: whitesmoke;
+    background: rgba(0, 0, 0, 0.2);
+}
+.conversation-table th,
+.conversation-table td {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    vertical-align: top;
+}
+.conversation-table thead th {
+    background: rgba(255, 255, 255, 0.08);
+}
+.conversation-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.05);
+}
+.conversation-table td {
+    white-space: pre-wrap;
+    word-break: break-word;
+}

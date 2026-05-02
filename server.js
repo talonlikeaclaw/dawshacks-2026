@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const path = require("path");
 const express = require("express");
 const twilio = require("twilio");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -9,6 +10,25 @@ const sqlite3 = require("sqlite3").verbose();
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "static")));
+app.use(
+  "/static",
+  express.static(path.join(__dirname, "static"), {
+    extensions: ["css", "js"],
+  }),
+);
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin.html"));
+});
+
+app.get("/static/admin.css", (req, res) => {
+  res.type("text/css").sendFile(path.join(__dirname, "static", "admin.css"));
+});
+
+app.get("/static/script.js", (req, res) => {
+  res.type("application/javascript").sendFile(path.join(__dirname, "static", "script.js"));
+});
 
 // Configuration
 const PORT = process.env.PORT || 3000;
