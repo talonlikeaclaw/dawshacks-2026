@@ -1,0 +1,38 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: lightcoral;
+    line-height: 1.6;
+}
+
+h1, h2, h3 {
+    color: whitesmoke;
+    margin-bottom: 1rem;
+}
+header {
+    background-color: #333;
+    color: whitesmoke;
+    text-align: center;
+    padding: 1rem;
+}
+p {
+    margin-bottom: 1rem;
+    color: black;
+    text-align: center;
+    font-size: 20px;
+    font-weight: bold;
+}
+div {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    border:#333 solid 1px;
+    color: whitesmoke;
+    text-align: center;
+}
