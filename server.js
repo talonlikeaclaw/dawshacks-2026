@@ -163,20 +163,21 @@ async function sendSms(to, body) {
  * @param {string} status - the status of the conversation
  * @returns {Promise<Object>} the created entry
  */
-function addConversation(phoneNumber, direction, body, status) {
+function addConversation(phoneNumber, direction, body, status, channel = "sms") {
   const entry = {
     id: Date.now() + Math.random().toString(36).slice(2, 7),
     time: new Date().toISOString(),
     phone: anonymizePhone(phoneNumber),
     direction, // 'inbound' | 'outbound'
     body: body.slice(0, 500),
-    status, // 'success' | 'error' | 'rate-limited'
+    status, // 'success' | 'error' | 'rate-limited',
+    channel, // 'sms' | 'voice'
   };
 
   return new Promise((resolve, reject) => {
     db.run(
-      `INSERT INTO conversations (id, time, phone, direction, body, status)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO conversations (id, time, phone, direction, body, status, channel)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.id,
         entry.time,
@@ -184,6 +185,7 @@ function addConversation(phoneNumber, direction, body, status) {
         entry.direction,
         entry.body,
         entry.status,
+        entry.channel,
       ],
       function (err) {
         if (err) return reject(err);
