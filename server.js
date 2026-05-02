@@ -13,7 +13,6 @@ app.use(express.json());
 // Configuration
 const PORT = process.env.PORT || 3000;
 const RATE_LIMIT_SECONDS = parseInt(process.env.RATE_LIMIT_SECONDS || "10", 10);
-const MAX_SMS_LENGTH = 320; // Keep responses under 320 chars when possible
 const SYSTEM_PROMPT = `You are a helpful AI assistant reachable via SMS.
 Keep responses SHORT and CONCISE (under 320 characters when possible).
 Use simple language. No markdown formatting. Be friendly but brief.`;
@@ -40,6 +39,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 // Map for phone numbers and last request timestamp
 const rateLimitMap = new Map();
+const userState = new Map();
 
 // SQLite setup
 const db = new sqlite3.Database("./conversations.db");
@@ -381,7 +381,7 @@ function buildWelcomeMenu() {
 
 // SMS Webhook
 app.post("/sms", async (req, res) => {
-  const { Body, From, MessageSid } = req.body;
+  const { Body, From } = req.body;
 
   console.log(`[${new Date().toISOString()}] Webhook from ${From}: "${Body}"`);
 
@@ -429,11 +429,12 @@ app.post("/sms", async (req, res) => {
     const menuText = buildWelcomeMenu();
     console.log(`Showing menu to ${From}`);
     await sendSms(From, menuText);
-    addConversation(From, "outbound", menuText, "success");
+    await addConversation(From, "outbound", menuText, "success");
     return res.status(200).type("text/xml").send("<Response></Response>");
   }
 
   // Check if message starts with a menu choice (1/2/3/4)
+  let geminiPrompt = messageBody;
   const firstChar = messageBody.charAt(0);
   if (["1", "2", "3", "4"].includes(firstChar)) {
     const choice = firstChar;
@@ -445,7 +446,7 @@ app.post("/sms", async (req, res) => {
 
     // If handler returns null, it means use Gemini for option 3
     if (handlerResponse === null) {
-      // Fall through to Gemini below
+      geminiPrompt = args; // strip the "3 " prefix before sending to Gemini
     } else {
       // Send the handler's response
       state.lastChoice = choice;
@@ -459,7 +460,7 @@ app.post("/sms", async (req, res) => {
         await sendSms(From, prefix + segment);
       }
 
-      addConversation(From, "outbound", handlerResponse, "success");
+      await addConversation(From, "outbound", handlerResponse, "success");
       return res.status(200).type("text/xml").send("<Response></Response>");
     }
   }
@@ -471,7 +472,7 @@ app.post("/sms", async (req, res) => {
       contents: [
         {
           role: "user",
-          parts: [{ text: SYSTEM_PROMPT + "\n\nUser: " + messageBody }],
+          parts: [{ text: SYSTEM_PROMPT + "\n\nUser: " + geminiPrompt }],
         },
       ],
       generationConfig: {
