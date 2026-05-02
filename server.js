@@ -258,6 +258,17 @@ app.post("/sms", async (req, res) => {
   res.status(200).type("text/xml").send("<Response></Response>");
 });
 
+// Admin API endpoint: Returns recent conversations as JSON
+app.get("/api/conversations", async (req, res) => {
+  try {
+    const rows = await getConversations();
+    res.json(rows);
+  } catch (err) {
+    console.error("DB error:", err.message);
+    res.status(500).json({ error: "Failed to fetch conversations" });
+  }
+});
+
 // Run the Express server :D
 app.listen(PORT, () => {
   console.log("Reachout server (SMS - Gemini Bridge)");
