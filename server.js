@@ -332,36 +332,28 @@ async function handleMenuChoice(phone, choice, args = "") {
     }
 
     case "2": {
-      // News handler (stub)
-      return "News coming soon! For now, try: 3 What's in the news today?";
-    }
-
-    case "3": {
-      // General ask handler (stub showing they can ask anything)
+      // General ask handler
       if (!cleanedArgs) {
-        return "Ask me anything! e.g., 3 What's the capital of France?";
+        return "Ask me anything! e.g., 2 What's the capital of France?";
       }
 
       // Mark that we're handling a question; the webhook will handle it
       return null; // signals to the webhook to use Gemini
     }
 
-    case "4": {
+    case "3": {
       // Help handler
       return [
         "Reachout AI Help:",
         "",
         "1 - Weather (1 city country)",
-        "2 - News (coming soon)",
-        "3 - Ask anything",
-        "4 - This help",
-        "",
-        "Text MENU to restart.",
+        "2 - Ask anything",
+        "3 - This help",
       ].join("\n");
     }
 
     default: {
-      return "Invalid choice. Text 1, 2, 3, or 4. Text MENU for options.";
+      return "Invalid choice. Text 1, 2, or 3. Text MENU for options.";
     }
   }
 }
@@ -386,11 +378,8 @@ function buildWelcomeMenu() {
     "",
     "Text a number to get started:",
     "1 - Weather",
-    "2 - News",
-    "3 - Ask a question",
-    "4 - Help",
-    "",
-    "Reply with MENU anytime.",
+    "2 - Ask a question",
+    "3 - Help",
   ].join("\n");
 }
 
@@ -448,10 +437,10 @@ app.post("/sms", async (req, res) => {
     return res.status(200).type("text/xml").send("<Response></Response>");
   }
 
-  // Check if message starts with a menu choice (1/2/3/4)
+  // Check if message starts with a menu choice (1/2/3)
   let geminiPrompt = messageBody;
   const firstChar = messageBody.charAt(0);
-  if (["1", "2", "3", "4"].includes(firstChar)) {
+  if (["1", "2", "3"].includes(firstChar)) {
     const choice = firstChar;
     const args = messageBody.slice(1).trim();
 

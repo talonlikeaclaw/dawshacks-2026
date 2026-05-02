@@ -136,7 +136,7 @@ Text a number to get started:
 | `2`    | Ask Gemini anything | `2 What causes thunder?` |
 | `3`    | Help / command list | `3`                      |
 
-Messages that don't start with 1–4 are sent directly to Gemini as free-form questions.
+Messages that don't start with 1–3 are sent directly to Gemini as free-form questions.
 
 ## Project Structure
 
@@ -168,13 +168,13 @@ curl "http://localhost:3000/api/conversations?limit=10"
 
 ## Features
 
-- **SMS menu system** — guided interface with weather, news, AI chat, and help
+- **SMS menu system** — guided interface with weather, AI chat, and help
 - **Voice calling** — call the number and have a spoken conversation with Gemini
 - **Multi-turn voice conversations** — call history is maintained for the duration of the call
 - **First-time auto-menu** — new SMS users see the menu automatically
-- **Free-form fallback** — SMS messages not starting with 1–4 go directly to Gemini
+- **Free-form fallback** — SMS messages not starting with 1–3 go directly to Gemini
 - **Weather lookup** (`1 city country`) — current conditions via OpenWeatherMap
-- **AI chat** (`3 question` or just speak) — answered by Gemini 2.5 Flash
+- **AI chat** (`2 question` or just speak) — answered by Gemini 2.5 Flash
 - **Conversation history** — all SMS and voice interactions stored in SQLite by channel
 - **Admin API** (`GET /api/conversations`) — recent conversations as JSON with optional limit
 - **Rate limiting** — 10 seconds between SMS requests per phone number
