@@ -30,11 +30,8 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 // In-memory state variables
 
-// Recent messages to display on status page
-const conversations = [];
 // Map for phone numbers and last request timestamp
 const rateLimitMap = new Map();
-const MAX_CONVERSATIONS = 50;
 
 // SQLite setup
 const db = new sqlite3.Database("./conversations.db");
