@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const twilio = require("twilio");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const sqlite3 = require("sqlite3").verbose();
 
 // Setup Express server
 const app = express();
@@ -12,7 +13,6 @@ app.use(express.json());
 // Configuration
 const PORT = process.env.PORT || 3000;
 const RATE_LIMIT_SECONDS = parseInt(process.env.RATE_LIMIT_SECONDS || "10", 10);
-const MAX_SMS_LENGTH = 320; // Keep responses under 320 chars when possible
 const SYSTEM_PROMPT = `You are a helpful AI assistant reachable via SMS.
 Keep responses SHORT and CONCISE (under 320 characters when possible).
 Use simple language. No markdown formatting. Be friendly but brief.`;
@@ -37,13 +37,43 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 // In-memory state variables
 
-// Recent messages to display on status page
-const conversations = [];
 // Map for phone numbers and last request timestamp
 const rateLimitMap = new Map();
-// Map for per-user menu state and lightweight SMS session info
 const userState = new Map();
-const MAX_CONVERSATIONS = 50;
+
+// SQLite setup
+const db = new sqlite3.Database("./conversations.db");
+
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      time TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL
+    )
+  `);
+});
+
+/**
+ * Fetches the most recent conversations from the database
+ * @param {number} limit - max number of records to return
+ * @returns {Promise<Array>} recent conversation entries
+ */
+function getConversations(limit = 50) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT * FROM conversations ORDER BY time DESC LIMIT ?`,
+      [limit],
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows);
+      },
+    );
+  });
+}
 
 /**
  * Shows only the last 4 digits of a phone number (+*******1234)
@@ -125,6 +155,7 @@ async function sendSms(to, body) {
  * @param {string} direction - the direction (inbound/outbound)
  * @param {string} body - the message body
  * @param {string} status - the status of the conversation
+ * @returns {Promise<Object>} the created entry
  */
 function addConversation(phoneNumber, direction, body, status) {
   const entry = {
@@ -135,11 +166,25 @@ function addConversation(phoneNumber, direction, body, status) {
     body: body.slice(0, 500),
     status, // 'success' | 'error' | 'rate-limited'
   };
-  conversations.unshift(entry);
-  if (conversations.length > MAX_CONVERSATIONS) {
-    conversations.pop();
-  }
-  return entry;
+
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT INTO conversations (id, time, phone, direction, body, status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        entry.id,
+        entry.time,
+        entry.phone,
+        entry.direction,
+        entry.body,
+        entry.status,
+      ],
+      function (err) {
+        if (err) return reject(err);
+        resolve(entry);
+      },
+    );
+  });
 }
 
 /**
@@ -238,7 +283,8 @@ async function getWeather(city, country = "") {
     console.error("Weather API error:", err.message);
     return {
       ok: false,
-      message: "Sorry, I couldn't fetch the weather right now. Try again in a moment.",
+      message:
+        "Sorry, I couldn't fetch the weather right now. Try again in a moment.",
     };
   }
 }
@@ -335,7 +381,7 @@ function buildWelcomeMenu() {
 
 // SMS Webhook
 app.post("/sms", async (req, res) => {
-  const { Body, From, MessageSid } = req.body;
+  const { Body, From } = req.body;
 
   console.log(`[${new Date().toISOString()}] Webhook from ${From}: "${Body}"`);
 
@@ -361,7 +407,7 @@ app.post("/sms", async (req, res) => {
   const rateCheck = checkRateLimit(From);
   if (!rateCheck.allowed) {
     console.log(`Rate limited: ${From} (wait ${rateCheck.wait}s)`);
-    addConversation(From, "inbound", messageBody, "rate-limited");
+    await addConversation(From, "inbound", messageBody, "rate-limited");
     await sendSms(
       From,
       `Whoa there! Wait ${rateCheck.wait}s before sending another message.`,
@@ -370,7 +416,7 @@ app.post("/sms", async (req, res) => {
   }
 
   // Log inbound messages
-  addConversation(From, "inbound", messageBody, "success");
+  await addConversation(From, "inbound", messageBody, "success");
 
   const state = getUserState(From);
 
@@ -383,11 +429,12 @@ app.post("/sms", async (req, res) => {
     const menuText = buildWelcomeMenu();
     console.log(`Showing menu to ${From}`);
     await sendSms(From, menuText);
-    addConversation(From, "outbound", menuText, "success");
+    await addConversation(From, "outbound", menuText, "success");
     return res.status(200).type("text/xml").send("<Response></Response>");
   }
 
   // Check if message starts with a menu choice (1/2/3/4)
+  let geminiPrompt = messageBody;
   const firstChar = messageBody.charAt(0);
   if (["1", "2", "3", "4"].includes(firstChar)) {
     const choice = firstChar;
@@ -399,7 +446,7 @@ app.post("/sms", async (req, res) => {
 
     // If handler returns null, it means use Gemini for option 3
     if (handlerResponse === null) {
-      // Fall through to Gemini below
+      geminiPrompt = args; // strip the "3 " prefix before sending to Gemini
     } else {
       // Send the handler's response
       state.lastChoice = choice;
@@ -413,7 +460,7 @@ app.post("/sms", async (req, res) => {
         await sendSms(From, prefix + segment);
       }
 
-      addConversation(From, "outbound", handlerResponse, "success");
+      await addConversation(From, "outbound", handlerResponse, "success");
       return res.status(200).type("text/xml").send("<Response></Response>");
     }
   }
@@ -425,7 +472,7 @@ app.post("/sms", async (req, res) => {
       contents: [
         {
           role: "user",
-          parts: [{ text: SYSTEM_PROMPT + "\n\nUser: " + messageBody }],
+          parts: [{ text: SYSTEM_PROMPT + "\n\nUser: " + geminiPrompt }],
         },
       ],
       generationConfig: {
@@ -449,10 +496,10 @@ app.post("/sms", async (req, res) => {
     }
 
     // Log outbound
-    addConversation(From, "outbound", aiText, "success");
+    await addConversation(From, "outbound", aiText, "success");
   } catch (err) {
     console.error("Gemini API error:", err.message);
-    addConversation(From, "outbound", "", "error");
+    await addConversation(From, "outbound", "", "error");
     await sendSms(
       From,
       "Sorry, the AI is having trouble right now. Try again in a moment!",
@@ -460,6 +507,19 @@ app.post("/sms", async (req, res) => {
   }
 
   res.status(200).type("text/xml").send("<Response></Response>");
+});
+
+// Admin API endpoint: Returns recent conversations as JSON
+// Optional query param: ?limit=N (defaults to 50)
+app.get("/api/conversations", async (req, res) => {
+  const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+  try {
+    const rows = await getConversations(limit);
+    res.json(rows);
+  } catch (err) {
+    console.error("DB error:", err.message);
+    res.status(500).json({ error: "Failed to fetch conversations" });
+  }
 });
 
 // Run the Express server :D
