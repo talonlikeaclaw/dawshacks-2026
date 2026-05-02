@@ -39,3 +39,28 @@ function anonymizePhone(phoneNumber) {
   }
   return "+" + "*".repeat(cleaned.length - 4) + cleaned.slice(-4);
 }
+
+/**
+ * Splits the SMS text messages into chunks
+ * (SMS messages are limited to 160 character per message
+ * or 153 for multi-part messages)
+ * @param {string} text
+ */
+function splitSms(text) {
+  if (text.length <= 160) {
+    return [text];
+  }
+
+  const segments = [];
+  let remaining = text;
+  // 153 - 8 = 145 chars max (messages prepend "(10/10) ")
+  const chunkSize = 145;
+
+  while (remaining.length > 0) {
+    const cut = remaining.length > chunkSize ? chunkSize : remaining.length;
+    segments.push(remaining.slice(0, cut));
+    remaining = remaining.slice(cut);
+  }
+
+  return segments;
+}
