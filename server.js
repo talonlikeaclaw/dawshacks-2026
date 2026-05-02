@@ -26,3 +26,16 @@ const twilioClient = twilio(
 // Gemini setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+/**
+ * Shows only the last 4 digits of a phone number (+*******1234)
+ * @param {number} phoneNumber - the phone number to anonymize
+ */
+function anonymizePhone(phoneNumber) {
+  const cleaned = phone.replace(/\D/g, "");
+
+  if (cleaned.length <= 4) {
+    return "****" + cleaned;
+  }
+  return "+" + "*".repeat(cleaned.length - 4) + cleaned.slice(-4);
+}
