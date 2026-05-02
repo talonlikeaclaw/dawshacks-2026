@@ -49,13 +49,15 @@ function checkRateLimit(phone) {
 }
 
 function splitSms(text) {
-  // GSM-7: 160 chars per segment, but 153 for multi-part (7 chars for UDH)
-  // To keep it simple for hackathon: hard split at 153 with "..." continuation
+  // GSM-7: 160 chars for single SMS, 153 for multi-part (7 chars for UDH header)
+  // When adding (X/Y) prefix, leave room so total stays under 153 per segment
   if (text.length <= 160) return [text];
   const segments = [];
   let remaining = text;
+  // 153 - 8 = 145 chars max per chunk to fit "(10/10) " prefix safely
+  const chunkSize = 145;
   while (remaining.length > 0) {
-    const cut = remaining.length > 153 ? 153 : remaining.length;
+    const cut = remaining.length > chunkSize ? chunkSize : remaining.length;
     segments.push(remaining.slice(0, cut));
     remaining = remaining.slice(cut);
   }
@@ -126,7 +128,6 @@ app.post("/sms", async (req, res) => {
         },
       ],
       generationConfig: {
-        maxOutputTokens: 300,
         temperature: 0.7,
       },
     });
