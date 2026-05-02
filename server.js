@@ -555,7 +555,7 @@ app.post("/voice", (req, res) => {
 
   //respond using twiML and listens, then sends to /voice/respond 
   res.type("text/xml").send(buildVoiceLoop(
-    "Hi! I'm your AI assistant. What can I help you with?",
+    "Hi! This is Reachout AI. I'm your personal assistant. What can I help you with?",
     "/voice/respond"
   ));
 });
@@ -624,7 +624,7 @@ app.post("/voice/end", (req, res) => {
   
   //end call session
   callSessions.delete(CallSid);
-  addConversationw(From, "inbound", "[Voice Call Ended]", "success", "voice");
+  addConversation(From, "inbound", "[Voice Call Ended]", "success", "voice");
   res.sendStatus(200);
 });
 >>>>>>> 771b02d (Add voice/end endpoint that cleans up call session)
