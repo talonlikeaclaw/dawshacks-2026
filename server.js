@@ -48,6 +48,23 @@ function anonymizePhone(phoneNumber) {
 }
 
 /**
+ * Checks the rateLimitMap to see if we should rate limit request
+ * @param {number} phoneNumber - the phone number to check the map for
+ * @returns allowed: true/false depending on if need to rate limit
+ */
+function checkRateLimit(phoneNumber) {
+  const now = Date.now();
+  const last = rateLimitMap.get(phoneNumber);
+  // checks of time since the last call is less than the rate‑limit window
+  if (last && now - last < RATE_LIMIT_SECONDS * 1000) {
+    const wait = Math.ceil((RATE_LIMIT_SECONDS * 1000 - (now - last)) / 1000);
+    return { allowed: false, wait };
+  }
+  rateLimitMap.set(phoneNumber, now);
+  return { allowed: true };
+}
+
+/**
  * Splits the SMS text messages into chunks
  * (SMS messages are limited to 160 character per message
  * or 153 for multi-part messages)
