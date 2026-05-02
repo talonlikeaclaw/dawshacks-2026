@@ -1,6 +1,8 @@
 require("dotenv").config();
 
+const fs = require("fs");
 const express = require("express");
+const path = require("path");
 const twilio = require("twilio");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
@@ -140,6 +142,14 @@ function addConversation(phoneNumber, direction, body, status) {
     conversations.pop();
   }
   return entry;
+}
+
+function renderLandingPage() {
+  const templatePath = path.join(__dirname, "public", "index.html");
+  const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || "your Twilio number";
+  const template = fs.readFileSync(templatePath, "utf8");
+
+  return template.replaceAll("{{TWILIO_PHONE_NUMBER}}", twilioPhoneNumber);
 }
 
 /**
@@ -332,6 +342,10 @@ function buildWelcomeMenu() {
     "Reply with MENU anytime.",
   ].join("\n");
 }
+
+app.get("/", (req, res) => {
+  res.type("html").send(renderLandingPage());
+});
 
 // SMS Webhook
 app.post("/sms", async (req, res) => {
