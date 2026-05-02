@@ -150,7 +150,7 @@ async function sendSms(to, body) {
 }
 
 /**
- *
+ * Adds a new conversation entry to the database
  * @param {string} phoneNumber - the phone number related to the convo
  * @param {string} direction - the direction (inbound/outbound)
  * @param {string} body - the message body
@@ -520,6 +520,38 @@ app.get("/api/conversations", async (req, res) => {
     console.error("DB error:", err.message);
     res.status(500).json({ error: "Failed to fetch conversations" });
   }
+});
+
+// ─── VOICE FUNCTIONS & WEBHOOKS ──────────────────────────────────────────────────────
+
+function buildVoiceLoop(text, actionPath){
+  const twiml = new twilio.twiml.VoiceResponse();
+  const gather = twiml.gather({
+    input: 'speech',
+    action: actionPath,
+    method: 'POST',
+    speechTimeout: 'auto',
+    speechModel: 'phone_call',
+    language: 'en-US',
+  });
+  gather.say(text, { voice: 'Polly.Joanna', language: 'en-US' });
+  return twiml.toString();
+}
+
+
+
+app.post("/voice", (req, res) => {
+  const { CallSid, From } = req.body;
+  console.log(`[${new Date().toISOString()}] Incoming call from ${From} - CallSid: ${CallSid}`);
+
+  //start voice session
+  callSessions.set(CallSid, { history: [], phone: From });
+  addConversation(From, "inbound", "[Voice Call Started]", "success", "voice");
+
+  res.type("text/xml").send(buildVoiceLoop(
+    "Hi! I'm your AI assistant. What can I help you with?",
+    "/voice/respond"
+  ));
 });
 
 // Run the Express server :D
