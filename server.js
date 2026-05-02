@@ -615,9 +615,6 @@ app.post("/voice/respond", async (req, res) => {
   }
 });  
 
-<<<<<<< HEAD
-// Run the Express server :D
-=======
 app.post("/voice/end", (req, res) => {
   const { CallSid, From } = req.body;
   console.log(`[${new Date().toISOString()}] Call ended from ${From} - CallSid: ${CallSid}`);
@@ -627,7 +624,8 @@ app.post("/voice/end", (req, res) => {
   addConversation(From, "inbound", "[Voice Call Ended]", "success", "voice");
   res.sendStatus(200);
 });
->>>>>>> 771b02d (Add voice/end endpoint that cleans up call session)
+
+// Run the Express server :D
 
 app.listen(PORT, () => {
   console.log("Reachout server (SMS - Gemini Bridge)");
