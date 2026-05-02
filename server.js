@@ -94,4 +94,16 @@ app.post("/sms", async (req, res) => {
     console.error("Incorrect webhook format:", req.body);
     return res.status(400).send("<Response></Response>");
   }
+
+  const messageBody = Body.trim();
+
+  // Handle empty messages
+  if (!messageBody) {
+    console.log("Empty message from", From);
+    await sendSms(
+      From,
+      "Looks like your message was empty. Send me a question!",
+    );
+    return res.status(200).type("text/xml").send("<Response></Response>");
+  }
 });
