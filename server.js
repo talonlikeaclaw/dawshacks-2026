@@ -344,6 +344,8 @@ function buildWelcomeMenu() {
 }
 
 app.get("/", (req, res) => {
+  const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || "(not configured)";
+  console.log(`Serving landing page — Twilio number: ${twilioPhoneNumber}`);
   res.type("html").send(renderLandingPage());
 });
 
