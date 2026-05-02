@@ -10,6 +10,9 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+// Serve static assets from the public directory (logo, images, scripts, css)
+// Keep index disabled so the custom rendered landing page handles "/".
+app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
 // Configuration
 const PORT = process.env.PORT || 3000;

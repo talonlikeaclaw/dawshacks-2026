@@ -8,6 +8,9 @@
       content="Reachout brings AI to simple SMS so older phones and older adults can access help without apps, Wi-Fi, or complicated setup."
     />
     <title>Reachout | AI by SMS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Sora:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
       :root {
         color-scheme: dark;
@@ -22,71 +25,43 @@
         --accent-3: #22c55e;
         --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
       }
-
-      * {
-        box-sizing: border-box;
-      }
-
+ 
+      * { box-sizing: border-box; }
+ 
       body {
         margin: 0;
         min-height: 100vh;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
         color: var(--text);
         background:
           radial-gradient(circle at top left, rgba(110, 231, 255, 0.18), transparent 34%),
           radial-gradient(circle at top right, rgba(139, 92, 246, 0.18), transparent 26%),
           linear-gradient(180deg, #04101c 0%, var(--bg) 45%, #071427 100%);
       }
-
+ 
       .wrap {
         width: min(1120px, calc(100% - 32px));
         margin: 0 auto;
         padding: 32px 0 40px;
       }
-
+ 
       .nav {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-        padding: 10px 0 28px;
-      }
-
-      .brand {
-        display: flex;
+        justify-content: flex-start;
         align-items: center;
         gap: 12px;
+        padding: 10px 0 28px;
+      }
+ 
+      .brand-name {
+        font-family: 'Sora', sans-serif;
         font-weight: 800;
-        letter-spacing: 0.2px;
-        font-size: 1.05rem;
+        font-size: 1.1rem;
+        letter-spacing: -0.02em;
+        color: var(--text);
       }
-
-      .brand-mark {
-        width: 40px;
-        height: 40px;
-        border-radius: 14px;
-        display: inline-block;
-        overflow: hidden;
-        box-shadow: var(--shadow);
-        background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      }
-      .brand-mark img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-      }
-
-      .pill {
-        padding: 10px 16px;
-        border-radius: 999px;
-        border: 1px solid rgba(110, 231, 255, 0.18);
-        background: rgba(8, 17, 31, 0.45);
-        color: var(--muted);
-        font-size: 0.94rem;
-        backdrop-filter: blur(12px);
-      }
-
+ 
+      /* ── Hero ── */
       .hero {
         position: relative;
         overflow: hidden;
@@ -96,7 +71,7 @@
         box-shadow: var(--shadow);
         padding: 42px;
       }
-
+ 
       .hero::before {
         content: "";
         position: absolute;
@@ -104,15 +79,58 @@
         background: radial-gradient(circle at top left, rgba(110, 231, 255, 0.22), transparent 30%);
         pointer-events: none;
       }
-
+ 
+      /* Round logo — top-right of hero */
+      .hero-logo {
+        position: absolute;
+        top: 28px;
+        right: 32px;
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid rgba(110, 231, 255, 0.28);
+        box-shadow: 0 0 32px rgba(110, 231, 255, 0.18), var(--shadow);
+        background: linear-gradient(135deg, #0e1f3a, #152a50);
+        z-index: 2;
+        flex-shrink: 0;
+      }
+ 
+      .hero-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        padding: 10px;
+        display: block;
+      }
+ 
+      /* fallback monogram if img missing */
+      .hero-logo-mono {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Sora', sans-serif;
+        font-weight: 800;
+        font-size: 1.6rem;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        user-select: none;
+      }
+ 
       .hero-grid {
         position: relative;
         display: grid;
-        grid-template-columns: 1.15fr 0.85fr;
+        grid-template-columns: 1fr;
         gap: 28px;
-        align-items: center;
+        z-index: 1;
+        /* leave space so content doesn't collide with absolute logo */
+        padding-right: 108px;
       }
-
+ 
       .eyebrow {
         display: inline-flex;
         align-items: center;
@@ -125,21 +143,22 @@
         font-size: 0.9rem;
         margin-bottom: 18px;
       }
-
+ 
       h1 {
         margin: 0;
+        font-family: 'Sora', sans-serif;
         font-size: clamp(3rem, 8vw, 5.2rem);
         line-height: 0.95;
         letter-spacing: -0.05em;
       }
-
+ 
       .gradient-text {
         background: linear-gradient(90deg, #ffffff 10%, var(--accent) 50%, #c4b5fd 86%);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
       }
-
+ 
       .lede {
         margin: 20px 0 0;
         color: #d8e7fb;
@@ -147,14 +166,14 @@
         font-size: 1.08rem;
         line-height: 1.75;
       }
-
+ 
       .cta-row {
         display: flex;
         gap: 14px;
         flex-wrap: wrap;
         margin-top: 28px;
       }
-
+ 
       .button {
         display: inline-flex;
         align-items: center;
@@ -164,92 +183,125 @@
         border-radius: 14px;
         text-decoration: none;
         font-weight: 700;
+        font-family: 'DM Sans', sans-serif;
         border: 1px solid transparent;
+        cursor: pointer;
         transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
       }
-
-      .button:hover {
-        transform: translateY(-1px);
-      }
-
+ 
+      .button:hover { transform: translateY(-1px); }
+ 
       .button.primary {
         background: linear-gradient(135deg, var(--accent), #8ddcff);
         color: #04101c;
       }
-
+ 
       .button.secondary {
         background: rgba(255, 255, 255, 0.04);
         border-color: rgba(255, 255, 255, 0.12);
         color: var(--text);
       }
-
-      .phone-card {
-        background: rgba(4, 12, 24, 0.58);
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        border-radius: 28px;
-        padding: 22px;
-        backdrop-filter: blur(18px);
-      }
-
-      .phone-screen {
-        border-radius: 24px;
-        background: linear-gradient(180deg, #0e1930, #08101e);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        padding: 20px;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-      }
-
-      .phone-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        color: #c7d5ea;
-        font-size: 0.85rem;
-        margin-bottom: 18px;
-      }
-
-      .menu-bubble {
-        background: linear-gradient(180deg, rgba(110, 231, 255, 0.14), rgba(139, 92, 246, 0.08));
-        border: 1px solid rgba(110, 231, 255, 0.18);
+ 
+      /* ── Number display ── */
+      .big-number {
+        margin: 22px auto 8px;
+        padding: 22px 28px;
         border-radius: 18px;
-        padding: 16px;
-        margin-bottom: 12px;
+        text-align: center;
+        background: linear-gradient(180deg, rgba(110,231,255,0.06), rgba(139,92,246,0.04));
+        border: 1px solid rgba(110, 231, 255, 0.14);
+        box-shadow: 0 10px 40px rgba(2,6,23,0.45);
       }
-
-      .menu-bubble strong {
-        display: block;
-        margin-bottom: 10px;
+ 
+      .big-number .label {
+        color: var(--muted);
+        font-size: 0.88rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 8px;
       }
-
-      .menu-line {
-        color: #eaf3ff;
-        line-height: 1.8;
-        font-size: 0.96rem;
+ 
+      .big-number .number {
+        font-family: 'Sora', monospace;
+        font-weight: 800;
+        font-size: clamp(1.6rem, 4vw, 2.4rem);
+        letter-spacing: 0.04em;
+        margin: 4px 0;
+        color: var(--accent);
       }
-
+ 
+      .big-number .number.unset {
+        color: rgba(158, 181, 212, 0.5);
+        font-size: 1.1rem;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+      }
+ 
+      .big-number .note {
+        color: var(--muted);
+        font-size: 0.88rem;
+        margin-top: 6px;
+      }
+ 
+      /* ── Stats ── */
       .stats {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 16px;
         margin-top: 18px;
       }
-
-      .big-number {
-        margin: 22px auto 8px;
-        padding: 18px 22px;
-        border-radius: 14px;
-        text-align: center;
-        max-width: 760px;
-        background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-        border: 1px solid rgba(255,255,255,0.04);
-        box-shadow: 0 10px 40px rgba(2,6,23,0.45);
+ 
+      .stat {
+        padding: 18px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(7, 14, 27, 0.54);
       }
-      .big-number .label { color: var(--muted); font-size: 0.9rem; margin-bottom: 6px; }
-      .big-number .number { font-weight: 800; font-size: 2rem; margin: 4px 0; color: var(--text); }
-      .big-number .note { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
-
-      /* adjust CTA and copy feedback */
-      #copy-number-button { cursor: pointer; }
+ 
+      .stat .label {
+        color: var(--muted);
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+ 
+      .stat .value {
+        margin-top: 8px;
+        font-size: 1.3rem;
+        font-weight: 800;
+        font-family: 'Sora', sans-serif;
+      }
+ 
+      /* ── Feature cards ── */
+      .section {
+        margin-top: 22px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+ 
+      .card {
+        padding: 22px;
+        border-radius: 24px;
+        background: rgba(10, 20, 37, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.15);
+      }
+ 
+      .card h2 {
+        margin: 0 0 10px;
+        font-family: 'Sora', sans-serif;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+ 
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.75;
+        font-size: 0.95rem;
+      }
+ 
+      /* copy feedback */
       .copy-feedback {
         display: inline-block;
         margin-left: 12px;
@@ -258,94 +310,45 @@
         opacity: 0;
         transition: opacity 160ms ease;
       }
-
-      .stat {
-        padding: 18px;
-        border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        background: rgba(7, 14, 27, 0.54);
-      }
-
-      .stat .label {
-        color: var(--muted);
-        font-size: 0.84rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }
-
-      .stat .value {
-        margin-top: 8px;
-        font-size: 1.3rem;
-        font-weight: 800;
-      }
-
-      .section {
-        margin-top: 22px;
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
-      }
-
-      .card {
-        padding: 22px;
-        border-radius: 24px;
-        background: rgba(10, 20, 37, 0.72);
-        border: 1px solid rgba(148, 163, 184, 0.15);
-        min-height: 100%;
-      }
-
-      .card h2 {
-        margin: 0 0 10px;
-        font-size: 1.05rem;
-      }
-
-      .card p {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.75;
-      }
-
+ 
       footer {
         margin-top: 28px;
         padding: 18px 8px 4px;
-        color: rgba(226, 232, 240, 0.8);
-        font-size: 0.92rem;
+        color: rgba(226, 232, 240, 0.7);
+        font-size: 0.9rem;
         text-align: center;
+        line-height: 1.7;
       }
-
-      footer strong {
-        color: #fff;
-      }
-
+ 
+      footer strong { color: #fff; }
+ 
       @media (max-width: 900px) {
-        .hero-grid,
-        .section,
-        .stats {
-          grid-template-columns: 1fr;
-        }
-
-        .hero {
-          padding: 24px;
-          border-radius: 24px;
-        }
-
-        .nav {
-          flex-direction: column;
-          align-items: flex-start;
-        }
+        .section, .stats { grid-template-columns: 1fr; }
+        .hero { padding: 24px; border-radius: 24px; }
+        .hero-grid { padding-right: 0; padding-top: 72px; }
+        .hero-logo { top: 20px; right: 20px; width: 60px; height: 60px; }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <div class="nav">
-        <div class="brand">
-          <div class="brand-mark"><img src="/Reachout-logo.png" alt="Reachout logo"></div>
-        </div>
-        <div class="pill">AI access over SMS • text {{TWILIO_PHONE_NUMBER}} • no Wi‑Fi needed</div>
-      </div>
-
+ 
+      <nav class="nav">
+        <span class="brand-name">Reachout</span>
+      </nav>
+ 
       <main class="hero">
+ 
+        <!-- Round logo, top-right corner of the hero card -->
+        <div class="hero-logo">
+          <img
+            src="Reachout-logo.png"
+            alt="Reachout logo"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+          >
+          <div class="hero-logo-mono" style="display:none;">R</div>
+        </div>
+ 
         <div class="hero-grid">
           <section>
             <div class="eyebrow">Designed for older phones and older adults</div>
@@ -354,25 +357,23 @@
             </h1>
             <p class="lede">
               Reachout bridges the gap in AI accessibility by bringing helpful, everyday assistance to simple text messages.
-              No smartphone required. No app download. No Wi‑Fi needed. Just send an SMS and get clear, friendly answers on any phone, including feature phones used by seniors and anyone who wants tech that feels easy.
+              No smartphone required. No app download. No Wi‑Fi needed. Just send an SMS and get clear, friendly answers on any phone — including feature phones used by seniors and anyone who wants tech that feels easy.
             </p>
             <div class="cta-row">
-              <button id="copy-number-button" class="button primary">Text {{TWILIO_PHONE_NUMBER}}</button>
+              <button id="copy-number-button" class="button primary">Text us</button>
               <a class="button secondary" href="#features">Why it helps</a>
+              <span class="copy-feedback" id="copy-feedback"></span>
             </div>
           </section>
-
-          <!-- phone-card removed per design request -->
         </div>
-
-          <!-- Big centered current number -->
-          <div class="big-number">
-            <div class="label">Current working number</div>
-            <div class="number">{{TWILIO_PHONE_NUMBER}}</div>
-            <div class="note">This is the number Reachout is currently using to send and receive SMS.</div>
-          </div>
-
-          <div class="stats">
+ 
+        <div class="big-number">
+          <div class="label">Current working number</div>
+          <div class="number" id="display-number">Loading…</div>
+          <div class="note">Text this number — no app or internet needed.</div>
+        </div>
+ 
+        <div class="stats">
           <div class="stat">
             <div class="label">Accessibility</div>
             <div class="value">Simple SMS</div>
@@ -387,7 +388,7 @@
           </div>
         </div>
       </main>
-
+ 
       <section class="section" id="features">
         <div class="card">
           <h2>Accessible by design</h2>
@@ -404,44 +405,65 @@
         <div class="card">
           <h2>Helpful for real life</h2>
           <p>
-            Weather, guidance, and general questions are all delivered in a format that works on feature phones and low-bandwidth connections.
+            Weather, guidance, and general questions — all delivered in a format that works on feature phones and low-bandwidth connections.
           </p>
         </div>
       </section>
-
+ 
       <footer>
-        Built for <strong>DawsHacks mini hackathon</strong> by a team of four: <strong>Artem Brandt</strong>, <strong>Talon Dunbar</strong>,
+        Built for <strong>DawsHacks mini hackathon</strong> by a team of four:
+        <strong>Artem Brandt</strong>, <strong>Talon Dunbar</strong>,
         <strong>Yan Chi Ng</strong>, and <strong>Jaden Ho</strong>.
       </footer>
+ 
     </div>
-
+ 
     <script>
-      (function () {
-        const btn = document.getElementById('copy-number-button');
-        const number = '{{TWILIO_PHONE_NUMBER}}';
-        function showFeedback(msg) {
-          let span = document.querySelector('.copy-feedback');
-          if (!span) {
-            span = document.createElement('span');
-            span.className = 'copy-feedback';
-            btn.parentNode.appendChild(span);
+      // ─── Phone number injection ───────────────────────────────────────────
+      // Option A (recommended): your Express/Node server replaces __PHONE__
+      // before serving this file, e.g.:
+      //   res.send(html.replace('__PHONE__', process.env.TWILIO_PHONE_NUMBER));
+      //
+      // Option B: set window.REACHOUT_PHONE from a tiny inline script your
+      // server injects, e.g.:  <script>window.REACHOUT_PHONE="+15141234567"<\/script>
+      //
+      // Option C (fallback for local demo): hardcode below.
+      // ─────────────────────────────────────────────────────────────────────
+ 
+      const PHONE = window.REACHOUT_PHONE   // Option B
+                 || '__PHONE__'             // Option A — replaced by server
+                 || '';                     // Option C — put number here as string
+ 
+      const displayEl = document.getElementById('display-number');
+      const btnEl     = document.getElementById('copy-number-button');
+      const feedbackEl = document.getElementById('copy-feedback');
+ 
+      const isPlaceholder = !PHONE || PHONE === '__PHONE__';
+ 
+      if (isPlaceholder) {
+        displayEl.textContent = 'Number not configured';
+        displayEl.classList.add('unset');
+        btnEl.textContent = 'Text us';
+        btnEl.disabled = true;
+        btnEl.style.opacity = '0.5';
+        btnEl.style.cursor = 'not-allowed';
+      } else {
+        displayEl.textContent = PHONE;
+        btnEl.textContent = 'Text ' + PHONE;
+ 
+        btnEl.addEventListener('click', async function () {
+          try {
+            await navigator.clipboard.writeText(PHONE);
+            feedbackEl.textContent = '✓ Copied to clipboard';
+            feedbackEl.style.opacity = '1';
+            setTimeout(() => (feedbackEl.style.opacity = '0'), 2200);
+          } catch {
+            feedbackEl.textContent = 'Copy failed — select manually';
+            feedbackEl.style.opacity = '1';
+            setTimeout(() => (feedbackEl.style.opacity = '0'), 2200);
           }
-          span.textContent = msg;
-          span.style.opacity = '1';
-          setTimeout(() => (span.style.opacity = '0'), 2000);
-        }
-        if (btn) {
-          btn.addEventListener('click', async function (e) {
-            try {
-              await navigator.clipboard.writeText(number);
-              showFeedback('Copied to clipboard');
-            } catch (err) {
-              showFeedback('Copy failed — select and copy manually');
-            }
-          });
-        }
-      })();
+        });
+      }
     </script>
-    </div>
   </body>
 </html>
