@@ -15,6 +15,14 @@ const MAX_SMS_LENGTH = 320; // Keep responses under 320 chars when possible
 const SYSTEM_PROMPT = `You are a helpful AI assistant reachable via SMS. 
 Keep responses SHORT and CONCISE (under 320 characters when possible). 
 Use simple language. No markdown formatting. Be friendly but brief.`;
+const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
+const WEATHER_GEO_BASE =
+  process.env.WEATHER_API_BASE ||
+  "https://api.openweathermap.org/geo/1.0/direct";
+const WEATHER_DATA_BASE =
+  process.env.WEATHER_DATA_BASE ||
+  "https://api.openweathermap.org/data/2.5/weather";
+const WEATHER_UNITS = process.env.WEATHER_UNITS || "metric";
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────
 const twilioClient = twilio(
@@ -24,10 +32,22 @@ const twilioClient = twilio(
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-// ─── IN-MEMORY STATE ──────────────────────────────────────────────────
-const conversations = []; // Recent messages for status page
-const rateLimitMap = new Map(); // phone -> last request timestamp
+// In-memory state variables
+
+// Recent messages to display on status page
+const conversations = [];
+// Map for phone numbers and last request timestamp
+const rateLimitMap = new Map();
+// Map for per-user menu state and lightweight SMS session info
+const userState = new Map();
 const MAX_CONVERSATIONS = 50;
+
+/**
+ * Shows only the last 4 digits of a phone number (+*******1234)
+ * @param {string} phoneNumber - the phone number to anonymize
+ */
+function anonymizePhone(phoneNumber) {
+  const cleaned = phoneNumber.replace(/\D/g, "");
 
 // ─── HELPERS ──────────────────────────────────────────────────────────
 function anonymizePhone(phone) {
@@ -37,12 +57,33 @@ function anonymizePhone(phone) {
   return "+" + "*".repeat(cleaned.length - 4) + cleaned.slice(-4);
 }
 
-function checkRateLimit(phone) {
+/**
+ * Checks the rateLimitMap to see if we should rate limit request
+ * @param {string} phoneNumber - the phone number to check the map for
+ * @returns allowed: true/false depending on if need to rate limit
+ */
+function checkRateLimit(phoneNumber) {
   const now = Date.now();
-  const last = rateLimitMap.get(phone);
+  const last = rateLimitMap.get(phoneNumber);
+  // checks of time since the last call is less than the rate‑limit window
   if (last && now - last < RATE_LIMIT_SECONDS * 1000) {
     const wait = Math.ceil((RATE_LIMIT_SECONDS * 1000 - (now - last)) / 1000);
     return { allowed: false, wait };
+  }
+  rateLimitMap.set(phoneNumber, now);
+  return { allowed: true };
+}
+
+/**
+ * Splits the SMS text messages into chunks
+ * (SMS messages are limited to 160 character per message
+ * or 153 for multi-part messages)
+ * @param {string} text - the text to split into chunks
+ * @returns the segmented text
+ */
+function splitSms(text) {
+  if (text.length <= 160) {
+    return [text];
   }
   rateLimitMap.set(phone, now);
   return { allowed: true };
@@ -64,21 +105,239 @@ function splitSms(text) {
   return segments;
 }
 
-function addConversation(phone, direction, body, status) {
+/**
+ * Sends an SMS message using Twilio client and console logs
+ * @param {string} to - the number to send the text to
+ * @param {string} body - the body text of the message to send
+ */
+async function sendSms(to, body) {
+  try {
+    await twilioClient.messages.create({
+      body,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to,
+    });
+    console.log(`SMS sent to ${to}: "${body.slice(0, 60)}..."`);
+  } catch (err) {
+    console.error("Twilio send error:", err.message);
+  }
+}
+
+/**
+ *
+ * @param {string} phoneNumber - the phone number related to the convo
+ * @param {string} direction - the direction (inbound/outbound)
+ * @param {string} body - the message body
+ * @param {string} status - the status of the conversation
+ */
+function addConversation(phoneNumber, direction, body, status) {
   const entry = {
     id: Date.now() + Math.random().toString(36).slice(2, 7),
     time: new Date().toISOString(),
-    phone: anonymizePhone(phone),
+    phone: anonymizePhone(phoneNumber),
     direction, // 'inbound' | 'outbound'
     body: body.slice(0, 500),
     status, // 'success' | 'error' | 'rate-limited'
   };
   conversations.unshift(entry);
-  if (conversations.length > MAX_CONVERSATIONS) conversations.pop();
+  if (conversations.length > MAX_CONVERSATIONS) {
+    conversations.pop();
+  }
   return entry;
 }
 
-// ─── SMS WEBHOOK ──────────────────────────────────────────────────────
+/**
+ * Gets or creates a state object for a phone number.
+ * This is stored in memory only and resets when the server restarts.
+ * @param {string} phoneNumber - the phone number related to the user state
+ * @returns {{ seenMenu: boolean, lastChoice: string | null, lastSeenAt: string | null }}
+ */
+function getUserState(phoneNumber) {
+  if (!userState.has(phoneNumber)) {
+    userState.set(phoneNumber, {
+      seenMenu: false,
+      lastChoice: null,
+      lastSeenAt: null,
+    });
+  }
+
+  return userState.get(phoneNumber);
+}
+
+/**
+ * Fetches current weather for a city and optional country.
+ * Uses OpenWeatherMap geocoding first, then the weather endpoint.
+ * @param {string} city - city name from the SMS message
+ * @param {string} country - optional country name or ISO code from the SMS message
+ * @returns {Promise<{ ok: boolean, message: string, location?: string }>}
+ */
+async function getWeather(city, country = "") {
+  const cleanedCity = String(city || "").trim();
+  const cleanedCountry = String(country || "").trim();
+
+  if (!cleanedCity) {
+    return {
+      ok: false,
+      message: "Send a city name like: Weather Montreal Canada",
+    };
+  }
+
+  if (!WEATHER_API_KEY) {
+    return {
+      ok: false,
+      message: "Weather is not configured yet. Missing WEATHER_API_KEY.",
+    };
+  }
+
+  try {
+    const query = cleanedCountry
+      ? `${cleanedCity}, ${cleanedCountry}`
+      : cleanedCity;
+
+    const geoUrl = new URL(WEATHER_GEO_BASE);
+    geoUrl.searchParams.set("q", query);
+    geoUrl.searchParams.set("limit", "1");
+    geoUrl.searchParams.set("appid", WEATHER_API_KEY);
+
+    const geoResponse = await fetch(geoUrl);
+    if (!geoResponse.ok) {
+      throw new Error(`Geocoding request failed (${geoResponse.status})`);
+    }
+
+    const geoData = await geoResponse.json();
+    if (!Array.isArray(geoData) || geoData.length === 0) {
+      return {
+        ok: false,
+        message: `Couldn't find weather for ${query}. Try: Weather Montreal Canada`,
+      };
+    }
+
+    const location = geoData[0];
+    const weatherUrl = new URL(WEATHER_DATA_BASE);
+    weatherUrl.searchParams.set("lat", location.lat);
+    weatherUrl.searchParams.set("lon", location.lon);
+    weatherUrl.searchParams.set("appid", WEATHER_API_KEY);
+    weatherUrl.searchParams.set("units", WEATHER_UNITS);
+
+    const weatherResponse = await fetch(weatherUrl);
+    if (!weatherResponse.ok) {
+      throw new Error(`Weather request failed (${weatherResponse.status})`);
+    }
+
+    const weatherData = await weatherResponse.json();
+    const description = weatherData?.weather?.[0]?.description || "unknown";
+    const temp = Math.round(weatherData?.main?.temp);
+    const feelsLike = Math.round(weatherData?.main?.feels_like);
+    const humidity = weatherData?.main?.humidity;
+    const cityName = location.name || cleanedCity;
+    const countryName = location.country || cleanedCountry;
+    const place = [cityName, countryName].filter(Boolean).join(", ");
+
+    return {
+      ok: true,
+      location: place,
+      message: `Weather for ${place}: ${temp}°${WEATHER_UNITS === "imperial" ? "F" : "C"}, feels like ${feelsLike}°, ${description}, humidity ${humidity}%.`,
+    };
+  } catch (err) {
+    console.error("Weather API error:", err.message);
+    return {
+      ok: false,
+      message: "Sorry, I couldn't fetch the weather right now. Try again in a moment.",
+    };
+  }
+}
+
+/**
+ * Routes a menu choice (1/2/3/4) to the appropriate handler
+ * text remainder is parsed as arguments for the handler
+ * @param {string} phone - phone number
+ * @param {string} choice - the menu choice ("1", "2", "3", or "4")
+ * @param {string} args - optional remainder of the message (e.g., "Montreal Canada" for weather)
+ * @returns {Promise<string>} the response message to send
+ */
+async function handleMenuChoice(phone, choice, args = "") {
+  const cleanedChoice = String(choice || "").trim();
+  const cleanedArgs = String(args || "").trim();
+
+  switch (cleanedChoice) {
+    case "1": {
+      // Weather handler
+      if (!cleanedArgs) {
+        return "Send: 1 city country (e.g., 1 Montreal Canada)";
+      }
+
+      const parts = cleanedArgs.split(/\s+/);
+      const city = parts[0];
+      const country = parts.slice(1).join(" ");
+
+      const result = await getWeather(city, country);
+      return result.message;
+    }
+
+    case "2": {
+      // News handler (stub)
+      return "News coming soon! For now, try: 3 What's in the news today?";
+    }
+
+    case "3": {
+      // General ask handler (stub showing they can ask anything)
+      if (!cleanedArgs) {
+        return "Ask me anything! e.g., 3 What's the capital of France?";
+      }
+
+      // Mark that we're handling a question; the webhook will handle it
+      return null; // signals to the webhook to use Gemini
+    }
+
+    case "4": {
+      // Help handler
+      return [
+        "Reachout AI Help:",
+        "",
+        "1 - Weather (1 city country)",
+        "2 - News (coming soon)",
+        "3 - Ask anything",
+        "4 - This help",
+        "",
+        "Text MENU to restart.",
+      ].join("\n");
+    }
+
+    default: {
+      return "Invalid choice. Text 1, 2, 3, or 4. Text MENU for options.";
+    }
+  }
+}
+
+/**
+ * Detects if the message is a menu keyword (for redisplaying the menu)
+ * @param {string} message - the message body
+ * @returns {boolean}
+ */
+function isMenuKeyword(message) {
+  const normalized = message.trim().toUpperCase();
+  return ["MENU", "START", "HELP", "?"].includes(normalized);
+}
+
+/**
+ * Builds and returns the Reachout AI welcome menu as a string
+ * @returns {string}
+ */
+function buildWelcomeMenu() {
+  return [
+    "Reachout AI",
+    "",
+    "Text a number to get started:",
+    "1 - Weather",
+    "2 - News",
+    "3 - Ask a question",
+    "4 - Help",
+    "",
+    "Reply with MENU anytime.",
+  ].join("\n");
+}
+
+// SMS Webhook
 app.post("/sms", async (req, res) => {
   const { Body, From, MessageSid } = req.body;
 
@@ -86,7 +345,7 @@ app.post("/sms", async (req, res) => {
 
   // Validate webhook
   if (!From || !Body) {
-    console.error("Malformed webhook:", req.body);
+    console.error("Incorrect webhook format:", req.body);
     return res.status(400).send("<Response></Response>");
   }
 
@@ -95,7 +354,6 @@ app.post("/sms", async (req, res) => {
   // Handle empty messages
   if (!messageBody) {
     console.log("Empty message from", From);
-    addConversation(From, "inbound", "", "error");
     await sendSms(
       From,
       "Looks like your message was empty. Send me a question!",
@@ -115,11 +373,58 @@ app.post("/sms", async (req, res) => {
     return res.status(200).type("text/xml").send("<Response></Response>");
   }
 
-  // Log inbound
+  // Log inbound messages
   addConversation(From, "inbound", messageBody, "success");
 
+  const state = getUserState(From);
+
+  // Check if user is asking for the menu (keyword) or if first-time user
+  if (isMenuKeyword(messageBody) || !state.seenMenu) {
+    state.seenMenu = true;
+    state.lastChoice = "menu";
+    state.lastSeenAt = new Date().toISOString();
+
+    const menuText = buildWelcomeMenu();
+    console.log(`Showing menu to ${From}`);
+    await sendSms(From, menuText);
+    addConversation(From, "outbound", menuText, "success");
+    return res.status(200).type("text/xml").send("<Response></Response>");
+  }
+
+  // Check if message starts with a menu choice (1/2/3/4)
+  const firstChar = messageBody.charAt(0);
+  if (["1", "2", "3", "4"].includes(firstChar)) {
+    const choice = firstChar;
+    const args = messageBody.slice(1).trim();
+
+    console.log(`Menu choice ${choice} from ${From} with args: "${args}"`);
+
+    const handlerResponse = await handleMenuChoice(From, choice, args);
+
+    // If handler returns null, it means use Gemini for option 3
+    if (handlerResponse === null) {
+      // Fall through to Gemini below
+    } else {
+      // Send the handler's response
+      state.lastChoice = choice;
+      state.lastSeenAt = new Date().toISOString();
+
+      const segments = splitSms(handlerResponse);
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        const prefix =
+          segments.length > 1 ? `(${i + 1}/${segments.length}) ` : "";
+        await sendSms(From, prefix + segment);
+      }
+
+      addConversation(From, "outbound", handlerResponse, "success");
+      return res.status(200).type("text/xml").send("<Response></Response>");
+    }
+  }
+
+  // Fallback: treat as free-form question to Gemini
   try {
-    // Call Gemini
+    // Call Gemini AI
     const result = await model.generateContent({
       contents: [
         {
@@ -134,6 +439,9 @@ app.post("/sms", async (req, res) => {
 
     const aiText = result.response.text().trim();
     console.log(`Gemini response for ${From}: "${aiText.slice(0, 80)}..."`);
+
+    state.lastChoice = "ask";
+    state.lastSeenAt = new Date().toISOString();
 
     // Send response(s)
     const segments = splitSms(aiText);
@@ -158,137 +466,9 @@ app.post("/sms", async (req, res) => {
   res.status(200).type("text/xml").send("<Response></Response>");
 });
 
-async function sendSms(to, body) {
-  try {
-    await twilioClient.messages.create({
-      body,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to,
-    });
-    console.log(`SMS sent to ${to}: "${body.slice(0, 60)}..."`);
-  } catch (err) {
-    console.error("Twilio send error:", err.message);
-  }
-}
-
-// ─── STATUS PAGE ──────────────────────────────────────────────────────
-app.get("/", (req, res) => {
-  const recent = conversations.slice(0, 20);
-  const rows = recent
-    .map((c) => {
-      const time = new Date(c.time).toLocaleTimeString();
-      const dirIcon = c.direction === "inbound" ? "📥" : "📤";
-      const statusColor =
-        c.status === "success"
-          ? "#10b981"
-          : c.status === "rate-limited"
-            ? "#f59e0b"
-            : "#ef4444";
-      return `
-      <tr>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:12px;">${time}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-size:12px;">${c.phone}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-size:14px;">${dirIcon} ${escapeHtml(c.body)}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;">
-          <span style="background:${statusColor};color:white;padding:2px 8px;border-radius:12px;font-size:11px;text-transform:uppercase;">${c.status}</span>
-        </td>
-      </tr>
-    `;
-    })
-    .join("");
-
-  res.send(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>SMS-Gemini Bridge | Live Status</title>
-  <meta http-equiv="refresh" content="3">
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 40px 20px; }
-    .container { max-width: 900px; margin: 0 auto; }
-    h1 { font-size: 28px; margin: 0 0 8px; color: #fff; }
-    .subtitle { color: #94a3b8; margin-bottom: 24px; }
-    .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-    .stat-card { background: #1e293b; border-radius: 12px; padding: 16px 20px; flex: 1; min-width: 140px; }
-    .stat-label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-value { font-size: 24px; font-weight: 700; color: #fff; margin-top: 4px; }
-    table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; }
-    th { text-align: left; padding: 12px 8px; background: #334155; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #cbd5e1; }
-    .pulse { display: inline-block; width: 10px; height: 10px; background: #10b981; border-radius: 50%; margin-right: 8px; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    .empty { text-align: center; padding: 40px; color: #64748b; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1><span class="pulse"></span>SMS-Gemini Bridge</h1>
-    <p class="subtitle">Live conversation feed — refreshes every 3 seconds</p>
-    
-    <div class="stats">
-      <div class="stat-card">
-        <div class="stat-label">Total Messages</div>
-        <div class="stat-value">${conversations.length}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Rate Limit</div>
-        <div class="stat-value">${RATE_LIMIT_SECONDS}s</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Status</div>
-        <div class="stat-value" style="color:#10b981;font-size:18px;">ONLINE</div>
-      </div>
-    </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Phone</th>
-          <th>Message</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows || '<tr><td colspan="4" class="empty">No messages yet. Text the Twilio number to start!</td></tr>'}
-      </tbody>
-    </table>
-  </div>
-</body>
-</html>`);
-});
-
-function escapeHtml(text) {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-// ─── HEALTH CHECK ─────────────────────────────────────────────────────
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    uptime: process.uptime(),
-    conversations: conversations.length,
-  });
-});
-
-// ─── START ────────────────────────────────────────────────────────────
+// Run the Express server :D
 app.listen(PORT, () => {
-  console.log(`
-╔══════════════════════════════════════════════════════════╗
-║        SMS-Gemini Bridge — Hackathon Edition             ║
-╠══════════════════════════════════════════════════════════╣
-║  Webhook: POST http://localhost:${PORT}/sms              ║
-║  Status:  http://localhost:${PORT}/                      ║
-║  Health:  http://localhost:${PORT}/health                ║
-╚══════════════════════════════════════════════════════════╝
-  `);
-});
-
-// ─── Log ────────────────────────────────────────────────────────────
-app.get("/api/conversations", (req, res) => {
-  res.json({ conversations });
-});
+  console.log("Reachout server (SMS - Gemini Bridge)");
+  console.log(`Webhook: POST http://localhost:${PORT}/sms`);
+  console.log(`Status:  http://localhost:${PORT}/`);
+})
