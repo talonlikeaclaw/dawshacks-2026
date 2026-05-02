@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const twilio = require("twilio");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const sqlite3 = require("sqlite3").verbose();
 
 // Setup Express server
 const app = express();
@@ -34,6 +35,22 @@ const conversations = [];
 // Map for phone numbers and last request timestamp
 const rateLimitMap = new Map();
 const MAX_CONVERSATIONS = 50;
+
+// SQLite setup
+const db = new sqlite3.Database("./conversations.db");
+
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      time TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL
+    )
+  `);
+});
 
 /**
  * Shows only the last 4 digits of a phone number (+*******1234)
