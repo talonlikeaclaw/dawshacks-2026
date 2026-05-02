@@ -1,10 +1,11 @@
 require("dotenv").config();
 
 const fs = require("fs");
-const express = require("express");
 const path = require("path");
+const express = require("express");
 const twilio = require("twilio");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const sqlite3 = require("sqlite3").verbose();
 
 // Setup Express server
 const app = express();
@@ -13,11 +14,29 @@ app.use(express.json());
 // Serve static assets from the public directory (logo, images, scripts, css)
 // Keep index disabled so the custom rendered landing page handles "/".
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
+app.use(express.static(path.join(__dirname, "static")));
+app.use(
+  "/static",
+  express.static(path.join(__dirname, "static"), {
+    extensions: ["css", "js"],
+  }),
+);
+
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin.html"));
+});
+
+app.get("/static/admin.css", (req, res) => {
+  res.type("text/css").sendFile(path.join(__dirname, "static", "admin.css"));
+});
+
+app.get("/static/script.js", (req, res) => {
+  res.type("application/javascript").sendFile(path.join(__dirname, "static", "script.js"));
+});
 
 // Configuration
 const PORT = process.env.PORT || 3000;
 const RATE_LIMIT_SECONDS = parseInt(process.env.RATE_LIMIT_SECONDS || "10", 10);
-const MAX_SMS_LENGTH = 320; // Keep responses under 320 chars when possible
 const SYSTEM_PROMPT = `You are a helpful AI assistant reachable via SMS.
 Keep responses SHORT and CONCISE (under 320 characters when possible).
 Use simple language. No markdown formatting. Be friendly but brief.`;
@@ -31,6 +50,12 @@ const WEATHER_DATA_BASE =
 const WEATHER_UNITS = process.env.WEATHER_UNITS || "metric";
 
 // Twilio setup
+const VOICE_SYSTEM_PROMPT = `You are a helpful AI assistant on a phone call.
+Respond in natural spoken English only — no markdown, no bullet points, no lists.
+Keep answers concise: 1–3 sentences max unless the user specifically asks for more detail.
+Never say "bullet point" or use symbols like asterisks or dashes.
+Be warm, clear, and direct.`;
+// ─── CLIENTS ──────────────────────────────────────────────────────────
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN,
@@ -40,15 +65,45 @@ const twilioClient = twilio(
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-// In-memory state variables
-
-// Recent messages to display on status page
-const conversations = [];
 // Map for phone numbers and last request timestamp
 const rateLimitMap = new Map();
-// Map for per-user menu state and lightweight SMS session info
 const userState = new Map();
-const MAX_CONVERSATIONS = 50;
+const callSessions = new Map(); // CallSid -> { history: [{role, parts}], phone }
+
+// SQLite setup
+const db = new sqlite3.Database("./conversations.db");
+
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      time TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL,
+      channel TEXT NOT NULL
+    )
+  `);
+});
+
+/**
+ * Fetches the most recent conversations from the database
+ * @param {number} limit - max number of records to return
+ * @returns {Promise<Array>} recent conversation entries
+ */
+function getConversations(limit = 50) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT * FROM conversations ORDER BY time DESC LIMIT ?`,
+      [limit],
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows);
+      },
+    );
+  });
+}
 
 /**
  * Shows only the last 4 digits of a phone number (+*******1234)
@@ -125,26 +180,43 @@ async function sendSms(to, body) {
 }
 
 /**
- *
+ * Adds a new conversation entry to the database
  * @param {string} phoneNumber - the phone number related to the convo
  * @param {string} direction - the direction (inbound/outbound)
  * @param {string} body - the message body
  * @param {string} status - the status of the conversation
+ * @returns {Promise<Object>} the created entry
  */
-function addConversation(phoneNumber, direction, body, status) {
+function addConversation(phoneNumber, direction, body, status, channel = "sms") {
   const entry = {
     id: Date.now() + Math.random().toString(36).slice(2, 7),
     time: new Date().toISOString(),
     phone: anonymizePhone(phoneNumber),
     direction, // 'inbound' | 'outbound'
     body: body.slice(0, 500),
-    status, // 'success' | 'error' | 'rate-limited'
+    status, // 'success' | 'error' | 'rate-limited',
+    channel, // 'sms' | 'voice'
   };
-  conversations.unshift(entry);
-  if (conversations.length > MAX_CONVERSATIONS) {
-    conversations.pop();
-  }
-  return entry;
+
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT INTO conversations (id, time, phone, direction, body, status, channel)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        entry.id,
+        entry.time,
+        entry.phone,
+        entry.direction,
+        entry.body,
+        entry.status,
+        entry.channel,
+      ],
+      function (err) {
+        if (err) return reject(err);
+        resolve(entry);
+      },
+    );
+  });
 }
 
 function renderLandingPage() {
@@ -257,7 +329,8 @@ async function getWeather(city, country = "") {
     console.error("Weather API error:", err.message);
     return {
       ok: false,
-      message: "Sorry, I couldn't fetch the weather right now. Try again in a moment.",
+      message:
+        "Sorry, I couldn't fetch the weather right now. Try again in a moment.",
     };
   }
 }
@@ -360,7 +433,7 @@ app.get("/", (req, res) => {
 
 // SMS Webhook
 app.post("/sms", async (req, res) => {
-  const { Body, From, MessageSid } = req.body;
+  const { Body, From } = req.body;
 
   console.log(`[${new Date().toISOString()}] Webhook from ${From}: "${Body}"`);
 
@@ -386,7 +459,7 @@ app.post("/sms", async (req, res) => {
   const rateCheck = checkRateLimit(From);
   if (!rateCheck.allowed) {
     console.log(`Rate limited: ${From} (wait ${rateCheck.wait}s)`);
-    addConversation(From, "inbound", messageBody, "rate-limited");
+    await addConversation(From, "inbound", messageBody, "rate-limited");
     await sendSms(
       From,
       `Whoa there! Wait ${rateCheck.wait}s before sending another message.`,
@@ -395,7 +468,7 @@ app.post("/sms", async (req, res) => {
   }
 
   // Log inbound messages
-  addConversation(From, "inbound", messageBody, "success");
+  await addConversation(From, "inbound", messageBody, "success");
 
   const state = getUserState(From);
 
@@ -408,11 +481,12 @@ app.post("/sms", async (req, res) => {
     const menuText = buildWelcomeMenu();
     console.log(`Showing menu to ${From}`);
     await sendSms(From, menuText);
-    addConversation(From, "outbound", menuText, "success");
+    await addConversation(From, "outbound", menuText, "success");
     return res.status(200).type("text/xml").send("<Response></Response>");
   }
 
   // Check if message starts with a menu choice (1/2/3/4)
+  let geminiPrompt = messageBody;
   const firstChar = messageBody.charAt(0);
   if (["1", "2", "3", "4"].includes(firstChar)) {
     const choice = firstChar;
@@ -424,7 +498,7 @@ app.post("/sms", async (req, res) => {
 
     // If handler returns null, it means use Gemini for option 3
     if (handlerResponse === null) {
-      // Fall through to Gemini below
+      geminiPrompt = args; // strip the "3 " prefix before sending to Gemini
     } else {
       // Send the handler's response
       state.lastChoice = choice;
@@ -438,7 +512,7 @@ app.post("/sms", async (req, res) => {
         await sendSms(From, prefix + segment);
       }
 
-      addConversation(From, "outbound", handlerResponse, "success");
+      await addConversation(From, "outbound", handlerResponse, "success");
       return res.status(200).type("text/xml").send("<Response></Response>");
     }
   }
@@ -450,7 +524,7 @@ app.post("/sms", async (req, res) => {
       contents: [
         {
           role: "user",
-          parts: [{ text: SYSTEM_PROMPT + "\n\nUser: " + messageBody }],
+          parts: [{ text: SYSTEM_PROMPT + "\n\nUser: " + geminiPrompt }],
         },
       ],
       generationConfig: {
@@ -474,10 +548,10 @@ app.post("/sms", async (req, res) => {
     }
 
     // Log outbound
-    addConversation(From, "outbound", aiText, "success");
+    await addConversation(From, "outbound", aiText, "success");
   } catch (err) {
     console.error("Gemini API error:", err.message);
-    addConversation(From, "outbound", "", "error");
+    await addConversation(From, "outbound", "", "error");
     await sendSms(
       From,
       "Sorry, the AI is having trouble right now. Try again in a moment!",
@@ -487,7 +561,117 @@ app.post("/sms", async (req, res) => {
   res.status(200).type("text/xml").send("<Response></Response>");
 });
 
+// Admin API endpoint: Returns recent conversations as JSON
+// Optional query param: ?limit=N (defaults to 50)
+app.get("/api/conversations", async (req, res) => {
+  const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+  try {
+    const rows = await getConversations(limit);
+    res.json(rows);
+  } catch (err) {
+    console.error("DB error:", err.message);
+    res.status(500).json({ error: "Failed to fetch conversations" });
+  }
+});
+
+// ─── VOICE FUNCTIONS & WEBHOOKS ──────────────────────────────────────────────────────
+
+function buildVoiceLoop(text, actionPath){
+  const twiml = new twilio.twiml.VoiceResponse();
+  const gather = twiml.gather({
+    input: 'speech',
+    action: actionPath,
+    method: 'POST',
+    speechTimeout: 'auto',
+    speechModel: 'phone_call',
+    language: 'en-US',
+  });
+  gather.say(text, { voice: 'Polly.Joanna', language: 'en-US' });
+  return twiml.toString();
+}
+
+app.post("/voice", (req, res) => {
+  const { CallSid, From } = req.body;
+  console.log(`[${new Date().toISOString()}] Incoming call from ${From} - CallSid: ${CallSid}`);
+
+  //start new voice session
+  callSessions.set(CallSid, { history: [], phone: From });
+  addConversation(From, "inbound", "[Voice Call Started]", "success", "voice");
+
+  //respond using twiML and listens, then sends to /voice/respond 
+  res.type("text/xml").send(buildVoiceLoop(
+    "Hi! This is Reachout AI. I'm your personal assistant. What can I help you with?",
+    "/voice/respond"
+  ));
+});
+
+app.post("/voice/respond", async (req, res) => {
+  const { CallSid, From, SpeechResult } = req.body;
+  console.log(`[${new Date().toISOString()}] Voice input from ${From} - CallSid: ${CallSid} - SpeechResult: "${SpeechResult}"`);
+
+  //get voice session history
+  const { history } = callSessions.get(CallSid);
+
+  const userText = SpeechResult.trim();
+  addConversation(From, "inbound", userText, "success", "voice");
+  
+  //add user input to history
+  history.push({ role: "user", parts: [{ text: userText }] });
+
+  //build contents of prompt to gemini, including system prompt and conversation history
+  const contents = [
+    {
+      role: "user",
+      parts: [{ text: VOICE_SYSTEM_PROMPT }],
+    },
+    {
+      role: "model",
+      parts: [{ text: "Understood. I'll keep my answers short and spoken naturally."}]
+    },
+    ...history,
+  ];
+
+  try{
+    const result = await model.generateContent({
+      contents,
+      generationConfig: {
+        temperature: 0.7,
+      },
+    });
+    //get gemini reply
+    const reply = result.response.text().trim();
+    console.log(`Gemini voice response for ${From}: "${reply.slice(0, 80)}..."`);
+
+    //add model reply to history
+    history.push({ role: "model", parts: [{ text: reply }] });
+    callSessions.get(CallSid).history = history;
+
+    addConversation(From, "outbound", reply, "success", "voice");
+
+    //restart conversation loop
+    res.type("text/xml").send(buildVoiceLoop(reply, "/voice/respond"));
+  } catch (err) {
+    console.error("Gemini API error:", err.message);
+    addConversation(From, "outbound", "", "error", "voice");
+    res.type("text/xml").send(
+      buildVoiceLoop("Sorry, the AI is having trouble right now. Try again in a moment!", 
+      "/voice/respond"
+    ));
+  }
+});  
+
+app.post("/voice/end", (req, res) => {
+  const { CallSid, From } = req.body;
+  console.log(`[${new Date().toISOString()}] Call ended from ${From} - CallSid: ${CallSid}`);
+  
+  //end call session
+  callSessions.delete(CallSid);
+  addConversation(From, "inbound", "[Voice Call Ended]", "success", "voice");
+  res.sendStatus(200);
+});
+
 // Run the Express server :D
+
 app.listen(PORT, () => {
   console.log("Reachout server (SMS - Gemini Bridge)");
   console.log(`Webhook: POST http://localhost:${PORT}/sms`);
