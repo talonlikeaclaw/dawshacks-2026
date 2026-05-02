@@ -27,12 +27,39 @@ p {
     font-size: 20px;
     font-weight: bold;
 }
-div {
+body {
+    min-height: 100vh;
     display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    border:#333 solid 1px;
+    flex-direction: column;
+}
+#logs {
+    display: block;
+    padding: 1rem;
+    width: 100%;
+    overflow-x: auto;
+}
+.conversation-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 auto;
+    max-width: 1200px;
     color: whitesmoke;
-    text-align: center;
+    background: rgba(0, 0, 0, 0.2);
+}
+.conversation-table th,
+.conversation-table td {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    vertical-align: top;
+}
+.conversation-table thead th {
+    background: rgba(255, 255, 255, 0.08);
+}
+.conversation-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.05);
+}
+.conversation-table td {
+    white-space: pre-wrap;
+    word-break: break-word;
 }

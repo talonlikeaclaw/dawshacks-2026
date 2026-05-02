@@ -1,15 +1,36 @@
 require("dotenv").config();
 
+const path = require("path");
 const express = require("express");
 const twilio = require("twilio");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const sqlite3 = require("sqlite3").verbose();
 
+// Setup Express server
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "static")));
+app.use(
+  "/static",
+  express.static(path.join(__dirname, "static"), {
+    extensions: ["css", "js"],
+  }),
+);
 
-// ─── CONFIG ───────────────────────────────────────────────────────────
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin.html"));
+});
+
+app.get("/static/admin.css", (req, res) => {
+  res.type("text/css").sendFile(path.join(__dirname, "static", "admin.css"));
+});
+
+app.get("/static/script.js", (req, res) => {
+  res.type("application/javascript").sendFile(path.join(__dirname, "static", "script.js"));
+});
+
+// Configuration
 const PORT = process.env.PORT || 3000;
 const RATE_LIMIT_SECONDS = parseInt(process.env.RATE_LIMIT_SECONDS || "10", 10);
 const SYSTEM_PROMPT = `You are a helpful AI assistant reachable via SMS.
@@ -24,11 +45,13 @@ const WEATHER_DATA_BASE =
   "https://api.openweathermap.org/data/2.5/weather";
 const WEATHER_UNITS = process.env.WEATHER_UNITS || "metric";
 
-// ─── CLIENTS ──────────────────────────────────────────────────────────
+// Twilio setup
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN,
 );
+
+// Gemini setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
@@ -79,11 +102,9 @@ function getConversations(limit = 50) {
 function anonymizePhone(phoneNumber) {
   const cleaned = phoneNumber.replace(/\D/g, "");
 
-// ─── HELPERS ──────────────────────────────────────────────────────────
-function anonymizePhone(phone) {
-  // Show only last 4 digits, e.g. +1******1234
-  const cleaned = phone.replace(/\D/g, "");
-  if (cleaned.length <= 4) return "****" + cleaned;
+  if (cleaned.length <= 4) {
+    return "****" + cleaned;
+  }
   return "+" + "*".repeat(cleaned.length - 4) + cleaned.slice(-4);
 }
 
@@ -115,23 +136,18 @@ function splitSms(text) {
   if (text.length <= 160) {
     return [text];
   }
-  rateLimitMap.set(phone, now);
-  return { allowed: true };
-}
 
-function splitSms(text) {
-  // GSM-7: 160 chars for single SMS, 153 for multi-part (7 chars for UDH header)
-  // When adding (X/Y) prefix, leave room so total stays under 153 per segment
-  if (text.length <= 160) return [text];
   const segments = [];
   let remaining = text;
-  // 153 - 8 = 145 chars max per chunk to fit "(10/10) " prefix safely
+  // 153 - 8 = 145 chars max (messages prepend "(10/10) ")
   const chunkSize = 145;
+
   while (remaining.length > 0) {
     const cut = remaining.length > chunkSize ? chunkSize : remaining.length;
     segments.push(remaining.slice(0, cut));
     remaining = remaining.slice(cut);
   }
+
   return segments;
 }
 
@@ -531,4 +547,4 @@ app.listen(PORT, () => {
   console.log("Reachout server (SMS - Gemini Bridge)");
   console.log(`Webhook: POST http://localhost:${PORT}/sms`);
   console.log(`Status:  http://localhost:${PORT}/`);
-})};
+});
