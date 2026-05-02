@@ -44,7 +44,7 @@ function anonymizePhone(phoneNumber) {
  * Splits the SMS text messages into chunks
  * (SMS messages are limited to 160 character per message
  * or 153 for multi-part messages)
- * @param {string} text
+ * @param {string} text - the text to split into chunks
  */
 function splitSms(text) {
   if (text.length <= 160) {
@@ -63,4 +63,22 @@ function splitSms(text) {
   }
 
   return segments;
+}
+
+/**
+ * Sends an SMS message using Twilio client and console logs
+ * @param {number} to - the number to send the text to
+ * @param {string} body - the body text of the message to send
+ */
+async function sendSms(to, body) {
+  try {
+    await twilioClient.messages.create({
+      body,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to,
+    });
+    console.log(`SMS sent to ${to}: "${body.slice(0, 60)}..."`);
+  } catch (err) {
+    console.error("Twilio send error:", err.message);
+  }
 }
