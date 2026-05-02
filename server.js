@@ -27,12 +27,20 @@ const twilioClient = twilio(
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+// In-memory state variables
+
+// Recent messages to display on status page
+const conversations = [];
+// Map for phone numbers and last request timestamp
+const rateLimitMap = new Map();
+const MAX_CONVERSATIONS = 50;
+
 /**
  * Shows only the last 4 digits of a phone number (+*******1234)
- * @param {number} phoneNumber - the phone number to anonymize
+ * @param {string} phoneNumber - the phone number to anonymize
  */
 function anonymizePhone(phoneNumber) {
-  const cleaned = phone.replace(/\D/g, "");
+  const cleaned = phoneNumber.replace(/\D/g, "");
 
   if (cleaned.length <= 4) {
     return "****" + cleaned;
@@ -41,10 +49,28 @@ function anonymizePhone(phoneNumber) {
 }
 
 /**
+ * Checks the rateLimitMap to see if we should rate limit request
+ * @param {string} phoneNumber - the phone number to check the map for
+ * @returns allowed: true/false depending on if need to rate limit
+ */
+function checkRateLimit(phoneNumber) {
+  const now = Date.now();
+  const last = rateLimitMap.get(phoneNumber);
+  // checks of time since the last call is less than the rate‑limit window
+  if (last && now - last < RATE_LIMIT_SECONDS * 1000) {
+    const wait = Math.ceil((RATE_LIMIT_SECONDS * 1000 - (now - last)) / 1000);
+    return { allowed: false, wait };
+  }
+  rateLimitMap.set(phoneNumber, now);
+  return { allowed: true };
+}
+
+/**
  * Splits the SMS text messages into chunks
  * (SMS messages are limited to 160 character per message
  * or 153 for multi-part messages)
  * @param {string} text - the text to split into chunks
+ * @returns the segmented text
  */
 function splitSms(text) {
   if (text.length <= 160) {
@@ -67,7 +93,7 @@ function splitSms(text) {
 
 /**
  * Sends an SMS message using Twilio client and console logs
- * @param {number} to - the number to send the text to
+ * @param {string} to - the number to send the text to
  * @param {string} body - the body text of the message to send
  */
 async function sendSms(to, body) {
@@ -82,3 +108,112 @@ async function sendSms(to, body) {
     console.error("Twilio send error:", err.message);
   }
 }
+
+/**
+ *
+ * @param {string} phoneNumber - the phone number related to the convo
+ * @param {string} direction - the direction (inbound/outbound)
+ * @param {string} body - the message body
+ * @param {string} status - the status of the conversation
+ */
+function addConversation(phoneNumber, direction, body, status) {
+  const entry = {
+    id: Date.now() + Math.random().toString(36).slice(2, 7),
+    time: new Date().toISOString(),
+    phone: anonymizePhone(phoneNumber),
+    direction, // 'inbound' | 'outbound'
+    body: body.slice(0, 500),
+    status, // 'success' | 'error' | 'rate-limited'
+  };
+  conversations.unshift(entry);
+  if (conversations.length > MAX_CONVERSATIONS) {
+    conversations.pop();
+  }
+  return entry;
+}
+
+// SMS Webhook
+app.post("/sms", async (req, res) => {
+  const { Body, From, MessageSid } = req.body;
+
+  console.log(`[${new Date().toISOString()}] Webhook from ${From}: "${Body}"`);
+
+  // Validate webhook
+  if (!From || !Body) {
+    console.error("Incorrect webhook format:", req.body);
+    return res.status(400).send("<Response></Response>");
+  }
+
+  const messageBody = Body.trim();
+
+  // Handle empty messages
+  if (!messageBody) {
+    console.log("Empty message from", From);
+    await sendSms(
+      From,
+      "Looks like your message was empty. Send me a question!",
+    );
+    return res.status(200).type("text/xml").send("<Response></Response>");
+  }
+
+  // Rate limiting
+  const rateCheck = checkRateLimit(From);
+  if (!rateCheck.allowed) {
+    console.log(`Rate limited: ${From} (wait ${rateCheck.wait}s)`);
+    addConversation(From, "inbound", messageBody, "rate-limited");
+    await sendSms(
+      From,
+      `Whoa there! Wait ${rateCheck.wait}s before sending another message.`,
+    );
+    return res.status(200).type("text/xml").send("<Response></Response>");
+  }
+
+  // Log inbound messages
+  addConversation(From, "inbound", messageBody, "success");
+
+  try {
+    // Call Gemini AI
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: SYSTEM_PROMPT + "\n\nUser: " + messageBody }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.7,
+      },
+    });
+
+    const aiText = result.response.text().trim();
+    console.log(`Gemini response for ${From}: "${aiText.slice(0, 80)}..."`);
+
+    // Send response(s)
+    const segments = splitSms(aiText);
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      const prefix =
+        segments.length > 1 ? `(${i + 1}/${segments.length}) ` : "";
+      await sendSms(From, prefix + segment);
+    }
+
+    // Log outbound
+    addConversation(From, "outbound", aiText, "success");
+  } catch (err) {
+    console.error("Gemini API error:", err.message);
+    addConversation(From, "outbound", "", "error");
+    await sendSms(
+      From,
+      "Sorry, the AI is having trouble right now. Try again in a moment!",
+    );
+  }
+
+  res.status(200).type("text/xml").send("<Response></Response>");
+});
+
+// Run the Express server :D
+app.listen(PORT, () => {
+  console.log("Reachout server (SMS - Gemini Bridge)");
+  console.log(`Webhook: POST http://localhost:${PORT}/sms`);
+  console.log(`Status:  http://localhost:${PORT}/`);
+});
