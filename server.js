@@ -510,9 +510,11 @@ app.post("/sms", async (req, res) => {
 });
 
 // Admin API endpoint: Returns recent conversations as JSON
+// Optional query param: ?limit=N (defaults to 50)
 app.get("/api/conversations", async (req, res) => {
+  const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
   try {
-    const rows = await getConversations();
+    const rows = await getConversations(limit);
     res.json(rows);
   } catch (err) {
     console.error("DB error:", err.message);
