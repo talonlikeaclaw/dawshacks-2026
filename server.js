@@ -37,10 +37,10 @@ const MAX_CONVERSATIONS = 50;
 
 /**
  * Shows only the last 4 digits of a phone number (+*******1234)
- * @param {number} phoneNumber - the phone number to anonymize
+ * @param {string} phoneNumber - the phone number to anonymize
  */
 function anonymizePhone(phoneNumber) {
-  const cleaned = phone.replace(/\D/g, "");
+  const cleaned = phoneNumber.replace(/\D/g, "");
 
   if (cleaned.length <= 4) {
     return "****" + cleaned;
@@ -50,7 +50,7 @@ function anonymizePhone(phoneNumber) {
 
 /**
  * Checks the rateLimitMap to see if we should rate limit request
- * @param {number} phoneNumber - the phone number to check the map for
+ * @param {string} phoneNumber - the phone number to check the map for
  * @returns allowed: true/false depending on if need to rate limit
  */
 function checkRateLimit(phoneNumber) {
@@ -93,7 +93,7 @@ function splitSms(text) {
 
 /**
  * Sends an SMS message using Twilio client and console logs
- * @param {number} to - the number to send the text to
+ * @param {string} to - the number to send the text to
  * @param {string} body - the body text of the message to send
  */
 async function sendSms(to, body) {
@@ -111,16 +111,16 @@ async function sendSms(to, body) {
 
 /**
  *
- * @param {number} phone - the phone number related to the convo
+ * @param {string} phoneNumber - the phone number related to the convo
  * @param {string} direction - the direction (inbound/outbound)
  * @param {string} body - the message body
  * @param {string} status - the status of the conversation
  */
-function addConversation(phone, direction, body, status) {
+function addConversation(phoneNumber, direction, body, status) {
   const entry = {
     id: Date.now() + Math.random().toString(36).slice(2, 7),
     time: new Date().toISOString(),
-    phone: anonymizePhone(phone),
+    phone: anonymizePhone(phoneNumber),
     direction, // 'inbound' | 'outbound'
     body: body.slice(0, 500),
     status, // 'success' | 'error' | 'rate-limited'
