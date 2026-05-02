@@ -80,13 +80,13 @@
         pointer-events: none;
       }
  
-      /* Round logo — top-right of hero */
+      /* Round logo - top-right of hero */
       .hero-logo {
         position: absolute;
         top: 28px;
         right: 32px;
-        width: 80px;
-        height: 80px;
+        width: 120px;
+        height: 120px;
         border-radius: 50%;
         overflow: hidden;
         border: 2px solid rgba(110, 231, 255, 0.28);
@@ -354,21 +354,16 @@
               <span class="gradient-text">Reachout</span>
             </h1>
             <p class="lede">
-              Reachout bridges the gap in AI accessibility by bringing helpful, everyday assistance to simple text messages.
-              No smartphone required. No app download. No Wi‑Fi needed. Just send an SMS and get clear, friendly answers on any phone — including feature phones used by seniors and anyone who wants tech that feels easy.
+              Reachout bridges the gap in AI accessibility by bringing helpful, everyday assistance to simple text messages - or voice calls. No smartphone required. No app download. No Wi‑Fi needed. Just send an SMS or dial the number, pick from simple menu options, and get clear, friendly answers on any phone - including feature phones used by seniors and anyone who wants tech that feels easy.
             </p>
-            <div class="cta-row">
-              <button id="copy-number-button" class="button primary">Text us</button>
-              <a class="button secondary" href="#features">Why it helps</a>
-              <span class="copy-feedback" id="copy-feedback"></span>
-            </div>
+            <span class="copy-feedback" id="copy-feedback"></span>
           </section>
         </div>
  
         <div class="big-number">
           <div class="label">Current working number</div>
           <div class="number" id="display-number">Loading…</div>
-          <div class="note">Text this number — no app or internet needed.</div>
+          <div class="note">Text this number - no app or internet needed.</div>
         </div>
  
         <div class="stats">
@@ -389,21 +384,21 @@
  
       <section class="section" id="features">
         <div class="card">
-          <h2>Accessible by design</h2>
+          <h2>Multiple ways to connect</h2>
           <p>
-            Reachout is built so that people who are less comfortable with apps and browsers can still access AI with a familiar text message.
+            Reach Reachout via SMS or voice call - whatever fits the situation. No typing required for voice, no minutes needed for SMS. Choose what works best.
           </p>
         </div>
         <div class="card" id="how-it-works">
-          <h2>Fast, familiar interaction</h2>
+          <h2>Simple menu-driven interaction</h2>
           <p>
-            Users send a short SMS, pick from simple menu options, and get concise responses back — making the experience easy to understand and easy to use.
+            Whether texting or calling, users pick from simple numbered options (1 for weather, 2 for news, 3 to ask, 4 for help) and get friendly, concise answers.
           </p>
         </div>
         <div class="card">
-          <h2>Helpful for real life</h2>
+          <h2>Built for basic phones</h2>
           <p>
-            Weather, guidance, and general questions — all delivered in a format that works on feature phones and low-bandwidth connections.
+            No internet, no app, no data plan needed. Works on feature phones, rotary lines, and every device in between. Pure voice and text.
           </p>
         </div>
       </section>
@@ -429,11 +424,10 @@
       // ─────────────────────────────────────────────────────────────────────
  
       const PHONE = window.REACHOUT_PHONE   // Option B
-                 || '__PHONE__'             // Option A — replaced by server
-                 || '';                     // Option C — put number here as string
+                 || '__PHONE__'             // Option A - replaced by server
+                 || '';                     // Option C - put number here as string
  
       const displayEl = document.getElementById('display-number');
-      const btnEl     = document.getElementById('copy-number-button');
       const feedbackEl = document.getElementById('copy-feedback');
  
       const isPlaceholder = !PHONE || PHONE === '__PHONE__';
@@ -441,26 +435,8 @@
       if (isPlaceholder) {
         displayEl.textContent = 'Number not configured';
         displayEl.classList.add('unset');
-        btnEl.textContent = 'Text us';
-        btnEl.disabled = true;
-        btnEl.style.opacity = '0.5';
-        btnEl.style.cursor = 'not-allowed';
       } else {
         displayEl.textContent = PHONE;
-        btnEl.textContent = 'Text ' + PHONE;
- 
-        btnEl.addEventListener('click', async function () {
-          try {
-            await navigator.clipboard.writeText(PHONE);
-            feedbackEl.textContent = '✓ Copied to clipboard';
-            feedbackEl.style.opacity = '1';
-            setTimeout(() => (feedbackEl.style.opacity = '0'), 2200);
-          } catch {
-            feedbackEl.textContent = 'Copy failed — select manually';
-            feedbackEl.style.opacity = '1';
-            setTimeout(() => (feedbackEl.style.opacity = '0'), 2200);
-          }
-        });
       }
     </script>
   </body>
