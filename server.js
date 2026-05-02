@@ -147,6 +147,7 @@ async function sendSms(to, body) {
  * @param {string} direction - the direction (inbound/outbound)
  * @param {string} body - the message body
  * @param {string} status - the status of the conversation
+ * @returns {Promise<Object>} the created entry
  */
 function addConversation(phoneNumber, direction, body, status) {
   const entry = {
@@ -157,11 +158,25 @@ function addConversation(phoneNumber, direction, body, status) {
     body: body.slice(0, 500),
     status, // 'success' | 'error' | 'rate-limited'
   };
-  conversations.unshift(entry);
-  if (conversations.length > MAX_CONVERSATIONS) {
-    conversations.pop();
-  }
-  return entry;
+
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT INTO conversations (id, time, phone, direction, body, status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        entry.id,
+        entry.time,
+        entry.phone,
+        entry.direction,
+        entry.body,
+        entry.status,
+      ],
+      function (err) {
+        if (err) return reject(err);
+        resolve(entry);
+      },
+    );
+  });
 }
 
 // SMS Webhook
