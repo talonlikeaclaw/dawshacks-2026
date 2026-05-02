@@ -149,10 +149,16 @@ function addConversation(phoneNumber, direction, body, status) {
 
 function renderLandingPage() {
   const templatePath = path.join(__dirname, "public", "index.html");
-  const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || "your Twilio number";
-  const template = fs.readFileSync(templatePath, "utf8");
+  const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || "";
+  let template = fs.readFileSync(templatePath, "utf8");
 
-  return template.replaceAll("{{TWILIO_PHONE_NUMBER}}", twilioPhoneNumber);
+  // Inject phone number into the head so it's available before the inline script runs
+  if (twilioPhoneNumber) {
+    const phoneScript = `<script>window.REACHOUT_PHONE="${twilioPhoneNumber}"<\/script>`;
+    template = template.replace("</head>", phoneScript + "\n</head>");
+  }
+
+  return template;
 }
 
 /**
