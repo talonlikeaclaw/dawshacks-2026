@@ -412,31 +412,12 @@
     </div>
  
     <script>
-      // ─── Phone number injection ───────────────────────────────────────────
-      // Option A (recommended): your Express/Node server replaces __PHONE__
-      // before serving this file, e.g.:
-      //   res.send(html.replace('__PHONE__', process.env.TWILIO_PHONE_NUMBER));
-      //
-      // Option B: set window.REACHOUT_PHONE from a tiny inline script your
-      // server injects, e.g.:  <script>window.REACHOUT_PHONE="+15141234567"<\/script>
-      //
-      // Option C (fallback for local demo): hardcode below.
-      // ─────────────────────────────────────────────────────────────────────
- 
-      const PHONE = window.REACHOUT_PHONE   // Option B
-                 || '__PHONE__'             // Option A - replaced by server
-                 || '';                     // Option C - put number here as string
- 
-      const displayEl = document.getElementById('display-number');
-      const feedbackEl = document.getElementById('copy-feedback');
- 
-      const isPlaceholder = !PHONE || PHONE === '__PHONE__';
- 
-      if (isPlaceholder) {
-        displayEl.textContent = 'Number not configured';
-        displayEl.classList.add('unset');
+      const el = document.getElementById('display-number');
+      if (window.REACHOUT_PHONE) {
+        el.textContent = window.REACHOUT_PHONE;
       } else {
-        displayEl.textContent = PHONE;
+        el.textContent = 'Number not configured';
+        el.classList.add('unset');
       }
     </script>
   </body>
