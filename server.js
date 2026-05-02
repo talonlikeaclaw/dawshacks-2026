@@ -57,7 +57,8 @@ db.serialize(() => {
       phone TEXT NOT NULL,
       direction TEXT NOT NULL,
       body TEXT NOT NULL,
-      status TEXT NOT NULL
+      status TEXT NOT NULL,
+      channel TEXT NOT NULL
     )
   `);
 });
