@@ -28,6 +28,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 // In-memory state variables
+
 // Recent messages to display on status page
 const conversations = [];
 // Map for phone numbers and last request timestamp
@@ -105,6 +106,29 @@ async function sendSms(to, body) {
   } catch (err) {
     console.error("Twilio send error:", err.message);
   }
+}
+
+/**
+ *
+ * @param {number} phone - the phone number related to the convo
+ * @param {string} direction - the direction (inbound/outbound)
+ * @param {string} body - the message body
+ * @param {string} status - the status of the conversation
+ */
+function addConversation(phone, direction, body, status) {
+  const entry = {
+    id: Date.now() + Math.random().toString(36).slice(2, 7),
+    time: new Date().toISOString(),
+    phone: anonymizePhone(phone),
+    direction, // 'inbound' | 'outbound'
+    body: body.slice(0, 500),
+    status, // 'success' | 'error' | 'rate-limited'
+  };
+  conversations.unshift(entry);
+  if (conversations.length > MAX_CONVERSATIONS) {
+    conversations.pop();
+  }
+  return entry;
 }
 
 // SMS Webhook
