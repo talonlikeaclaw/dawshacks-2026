@@ -16,6 +16,14 @@ const MAX_SMS_LENGTH = 320; // Keep responses under 320 chars when possible
 const SYSTEM_PROMPT = `You are a helpful AI assistant reachable via SMS.
 Keep responses SHORT and CONCISE (under 320 characters when possible).
 Use simple language. No markdown formatting. Be friendly but brief.`;
+const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
+const WEATHER_GEO_BASE =
+  process.env.WEATHER_API_BASE ||
+  "https://api.openweathermap.org/geo/1.0/direct";
+const WEATHER_DATA_BASE =
+  process.env.WEATHER_DATA_BASE ||
+  "https://api.openweathermap.org/data/2.5/weather";
+const WEATHER_UNITS = process.env.WEATHER_UNITS || "metric";
 
 // Twilio setup
 const twilioClient = twilio(
@@ -150,6 +158,89 @@ function getUserState(phoneNumber) {
   }
 
   return userState.get(phoneNumber);
+}
+
+/**
+ * Fetches current weather for a city and optional country.
+ * Uses OpenWeatherMap geocoding first, then the weather endpoint.
+ * @param {string} city - city name from the SMS message
+ * @param {string} country - optional country name or ISO code from the SMS message
+ * @returns {Promise<{ ok: boolean, message: string, location?: string }>}
+ */
+async function getWeather(city, country = "") {
+  const cleanedCity = String(city || "").trim();
+  const cleanedCountry = String(country || "").trim();
+
+  if (!cleanedCity) {
+    return {
+      ok: false,
+      message: "Send a city name like: Weather Montreal Canada",
+    };
+  }
+
+  if (!WEATHER_API_KEY) {
+    return {
+      ok: false,
+      message: "Weather is not configured yet. Missing WEATHER_API_KEY.",
+    };
+  }
+
+  try {
+    const query = cleanedCountry
+      ? `${cleanedCity}, ${cleanedCountry}`
+      : cleanedCity;
+
+    const geoUrl = new URL(WEATHER_GEO_BASE);
+    geoUrl.searchParams.set("q", query);
+    geoUrl.searchParams.set("limit", "1");
+    geoUrl.searchParams.set("appid", WEATHER_API_KEY);
+
+    const geoResponse = await fetch(geoUrl);
+    if (!geoResponse.ok) {
+      throw new Error(`Geocoding request failed (${geoResponse.status})`);
+    }
+
+    const geoData = await geoResponse.json();
+    if (!Array.isArray(geoData) || geoData.length === 0) {
+      return {
+        ok: false,
+        message: `Couldn't find weather for ${query}. Try: Weather Montreal Canada`,
+      };
+    }
+
+    const location = geoData[0];
+    const weatherUrl = new URL(WEATHER_DATA_BASE);
+    weatherUrl.searchParams.set("lat", location.lat);
+    weatherUrl.searchParams.set("lon", location.lon);
+    weatherUrl.searchParams.set("appid", WEATHER_API_KEY);
+    weatherUrl.searchParams.set("units", WEATHER_UNITS);
+
+    const weatherResponse = await fetch(weatherUrl);
+    if (!weatherResponse.ok) {
+      throw new Error(`Weather request failed (${weatherResponse.status})`);
+    }
+
+    const weatherData = await weatherResponse.json();
+    const description = weatherData?.weather?.[0]?.description || "unknown";
+    const temp = Math.round(weatherData?.main?.temp);
+    const feelsLike = Math.round(weatherData?.main?.feels_like);
+    const humidity = weatherData?.main?.humidity;
+    const cityName = location.name || cleanedCity;
+    const countryName = location.country || cleanedCountry;
+    const place = [cityName, countryName].filter(Boolean).join(", ");
+
+    return {
+      ok: true,
+      location: place,
+      message: `Weather for ${place}: ${temp}°${WEATHER_UNITS === "imperial" ? "F" : "C"}, feels like ${feelsLike}°, ${description}, humidity ${humidity}%.`,
+    };
+  } catch (err) {
+    console.error("Weather API error:", err.message);
+    return {
+      ok: false,
+      message: "Sorry, I couldn't fetch the weather right now. Try again in a moment.",
+    };
+  }
 }
 
 // SMS Webhook
