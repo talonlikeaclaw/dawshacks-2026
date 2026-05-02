@@ -207,7 +207,7 @@ app.post("/sms", async (req, res) => {
   const rateCheck = checkRateLimit(From);
   if (!rateCheck.allowed) {
     console.log(`Rate limited: ${From} (wait ${rateCheck.wait}s)`);
-    addConversation(From, "inbound", messageBody, "rate-limited");
+    await addConversation(From, "inbound", messageBody, "rate-limited");
     await sendSms(
       From,
       `Whoa there! Wait ${rateCheck.wait}s before sending another message.`,
@@ -216,7 +216,7 @@ app.post("/sms", async (req, res) => {
   }
 
   // Log inbound messages
-  addConversation(From, "inbound", messageBody, "success");
+  await addConversation(From, "inbound", messageBody, "success");
 
   try {
     // Call Gemini AI
@@ -245,10 +245,10 @@ app.post("/sms", async (req, res) => {
     }
 
     // Log outbound
-    addConversation(From, "outbound", aiText, "success");
+    await addConversation(From, "outbound", aiText, "success");
   } catch (err) {
     console.error("Gemini API error:", err.message);
-    addConversation(From, "outbound", "", "error");
+    await addConversation(From, "outbound", "", "error");
     await sendSms(
       From,
       "Sorry, the AI is having trouble right now. Try again in a moment!",
